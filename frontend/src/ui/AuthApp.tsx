@@ -84,9 +84,14 @@ export const AuthApp: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-100 flex items-center justify-center px-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg">
-        <div className="mb-4 text-center">
+        <div className="mb-6 text-center">
+          <img 
+            src="/logo.svg" 
+            alt="Company Logo" 
+            className="h-12 w-auto mx-auto mb-4"
+          />
           <h1 className="text-lg font-semibold text-slate-900">Quote Pipeline</h1>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-500 mt-1">
             {mode === 'login' ? 'Sign in to your account' : 'Create a new account'}
           </p>
         </div>

@@ -320,9 +320,11 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
       <header className="border-b border-slate-200 bg-white/80 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
-              <span className="text-lg font-semibold">QP</span>
-            </div>
+            <img 
+              src="/logo.svg" 
+              alt="Company Logo" 
+              className="h-10 w-auto"
+            />
             <div>
               <h1 className="text-lg font-semibold text-slate-900">
                 Quote Pipeline
