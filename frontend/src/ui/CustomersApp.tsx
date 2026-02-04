@@ -143,6 +143,12 @@ export const CustomersApp: React.FC<{ onNavigateToKanban: () => void }> = ({ onN
                     </p>
                   )}
 
+                  {quote.createdByName && (
+                    <p className="text-xs text-slate-500 mb-2">
+                      Created by: <span className="font-medium text-slate-700">{quote.createdByName}</span>
+                    </p>
+                  )}
+
                   {quote.status && (
                     <p className="text-xs text-slate-500 mb-2">
                       Status: <span className="font-medium">{quote.status}</span>

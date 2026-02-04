@@ -16,6 +16,8 @@ export type QuoteCard = {
   clientName: string;
   customerId?: string | null;
   customerName?: string | null;
+  createdBy?: string | null;
+  createdByName?: string | null;
   value?: number;
   stage: StageKey;
   position?: number;
