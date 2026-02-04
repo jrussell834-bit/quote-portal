@@ -12,6 +12,7 @@ type View = 'kanban' | 'customers' | 'crm' | 'tasks' | 'admin';
 export const AuthApp: React.FC = () => {
   const [mode, setMode] = useState<Mode>('login');
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -25,12 +26,17 @@ export const AuthApp: React.FC = () => {
     setLoading(true);
     try {
       if (mode === 'register') {
-        const res = await register(username, password);
+        if (!email || !email.trim()) {
+          setAuthError('Email address is required');
+          return;
+        }
+        const res = await register(username, email, password);
         // Registration successful but no token - show success message
         setAuthError(null);
         alert(res.message || 'Registration successful! Your account is pending admin approval. You will be able to login once an administrator approves your account.');
         setMode('login');
         setUsername('');
+        setEmail('');
         setPassword('');
       } else {
         const res = await login(username, password);
@@ -94,7 +100,7 @@ export const AuthApp: React.FC = () => {
       // Decode token to check if user is admin
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
-        setIsAdmin(payload.email === 'admin');
+        setIsAdmin(payload.username === 'admin' || payload.email === 'admin');
       } catch (err) {
         setIsAdmin(false);
       }
@@ -147,6 +153,19 @@ export const AuthApp: React.FC = () => {
               required
             />
           </label>
+          {mode === 'register' && (
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-slate-600">Email Address *</span>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none ring-blue-500/0 transition focus:bg-white focus:ring-2"
+                required
+                placeholder="your.email@example.com"
+              />
+            </label>
+          )}
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-slate-600">Password</span>
             <input

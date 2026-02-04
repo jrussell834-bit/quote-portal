@@ -129,6 +129,7 @@ export const AdminApp: React.FC<{ onNavigateToDashboard: () => void }> = ({ onNa
               <thead className="bg-slate-50">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-slate-600">Username</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-600">Email</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-slate-600">Status</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-slate-600">Created</th>
                   {activeTab === 'pending' && (
@@ -139,7 +140,8 @@ export const AdminApp: React.FC<{ onNavigateToDashboard: () => void }> = ({ onNa
               <tbody className="divide-y divide-slate-200">
                 {displayUsers.map((user) => (
                   <tr key={user.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 text-sm text-slate-900">{user.email}</td>
+                    <td className="px-4 py-3 text-sm text-slate-900">{user.username || user.email}</td>
+                    <td className="px-4 py-3 text-sm text-slate-600">{user.email}</td>
                     <td className="px-4 py-3">
                       <span
                         className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${

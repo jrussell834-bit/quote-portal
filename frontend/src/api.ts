@@ -83,10 +83,10 @@ export async function uploadQuoteAttachment(id: string, file: File) {
   return res.data;
 }
 
-export async function register(username: string, password: string) {
+export async function register(username: string, email: string, password: string) {
   try {
-    const res = await api.post('/auth/register', { username, password });
-    return res.data as { message: string; user: { id: string; email: string; approved: boolean } };
+    const res = await api.post('/auth/register', { username, email, password });
+    return res.data as { message: string; user: { id: string; username: string; email: string; approved: boolean } };
   } catch (error: any) {
     console.error('Register API error:', error);
     throw error;
@@ -105,6 +105,7 @@ export async function login(username: string, password: string) {
 
 export type User = {
   id: string;
+  username: string;
   email: string;
   approved: boolean;
   createdAt: string;
