@@ -613,6 +613,11 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void; onNavigate
                                     SO: <span className="font-medium text-slate-700">{quote.soNumber}</span>
                                   </p>
                                 )}
+                                {quote.createdByName && (
+                                  <p className="mb-1 text-xs text-slate-500">
+                                    Created by: <span className="font-medium text-slate-700">{quote.createdByName}</span>
+                                  </p>
+                                )}
                                 <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-500">
                                   <div className="flex flex-col">
                                     <span className="uppercase tracking-wide text-slate-400">
