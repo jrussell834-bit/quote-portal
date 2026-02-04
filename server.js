@@ -12,7 +12,11 @@ const {
   getQuoteById,
   createUser,
   findUserByEmail,
-  ensureAdminUser
+  ensureAdminUser,
+  getAllCustomers,
+  getCustomerById,
+  findOrCreateCustomer,
+  getQuotesByCustomerId
 } = require('./db');
 const { startReminderScheduler } = require('./reminderService');
 
@@ -28,41 +32,30 @@ const uploadsDir = path.join(__dirname, 'uploads');
 const upload = multer({ dest: uploadsDir });
 app.use('/uploads', express.static(uploadsDir));
 
-// Serve static files from frontend/dist in production
-if (process.env.NODE_ENV === 'production') {
-  const frontendDist = path.join(__dirname, 'frontend', 'dist');
-  app.use(express.static(frontendDist));
-  
-  // Handle React Router - serve index.html for all non-API routes
-  app.get('*', (req, res, next) => {
-    // Skip API routes and static file routes
-    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
-      return next();
-    }
-    // Serve index.html for all other routes (React Router)
-    res.sendFile(path.join(frontendDist, 'index.html'));
-  });
-}
-
 // Root route
 app.get('/', (_req, res) => {
   res.json({ 
     message: 'Quote Portal API',
     version: '1.0.0',
-    endpoints: {
-      health: '/api/health',
-      auth: {
-        register: 'POST /api/auth/register',
-        login: 'POST /api/auth/login'
-      },
-      quotes: {
-        list: 'GET /api/quotes',
-        create: 'POST /api/quotes',
-        update: 'PUT /api/quotes/:id',
-        updateStage: 'PATCH /api/quotes/:id/stage',
-        uploadAttachment: 'POST /api/quotes/:id/attachment'
+      endpoints: {
+        health: '/api/health',
+        auth: {
+          register: 'POST /api/auth/register',
+          login: 'POST /api/auth/login'
+        },
+        quotes: {
+          list: 'GET /api/quotes',
+          create: 'POST /api/quotes',
+          update: 'PUT /api/quotes/:id',
+          updateStage: 'PATCH /api/quotes/:id/stage',
+          uploadAttachment: 'POST /api/quotes/:id/attachment'
+        },
+        customers: {
+          list: 'GET /api/customers',
+          getById: 'GET /api/customers/:id',
+          create: 'POST /api/customers'
+        }
       }
-    }
   });
 });
 
@@ -190,6 +183,7 @@ function createQuote(payload) {
     id: `q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     title: payload.title ?? 'Untitled quote',
     clientName: payload.clientName ?? 'Unknown client',
+    customerId: payload.customerId ?? null,
     value: payload.value ?? null,
     stage: payload.stage ?? 'new',
     lastChasedAt: payload.lastChasedAt ?? null,
@@ -197,6 +191,7 @@ function createQuote(payload) {
     reminderEmail: payload.reminderEmail ?? null,
     attachmentUrl: payload.attachmentUrl ?? null,
     status: payload.status ?? null,
+    notes: payload.notes ?? null,
     createdAt: now,
     updatedAt: now
   };
@@ -216,12 +211,36 @@ app.get('/api/quotes', authMiddleware, async (_req, res) => {
 // Create new quote
 app.post('/api/quotes', authMiddleware, async (req, res) => {
   try {
-    const quote = createQuote(req.body || {});
+    const body = req.body || {};
+    let customerId = body.customerId;
+    
+    // If customer name is provided but no customerId, find or create customer
+    if (body.customerName && !customerId) {
+      const customer = await findOrCreateCustomer(body.customerName);
+      customerId = customer.id;
+    }
+    
+    const quote = createQuote({ ...body, customerId });
     await insertQuote(quote);
-    res.status(201).json(quote);
+    
+    // Fetch the full quote with customer info
+    const fullQuote = await getQuoteById(quote.id);
+    res.status(201).json(fullQuote || quote);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Error creating quote' });
+    console.error('[create quote] Error:', err);
+    console.error('[create quote] Error details:', {
+      message: err?.message,
+      code: err?.code,
+      detail: err?.detail,
+      constraint: err?.constraint,
+      stack: err?.stack
+    });
+    const errorMessage = err?.message || 'Error creating quote';
+    res.status(500).json({ 
+      message: 'Error creating quote',
+      error: errorMessage,
+      details: err?.detail || err?.code
+    });
   }
 });
 
@@ -279,7 +298,49 @@ app.post('/api/quotes/:id/attachment', authMiddleware, upload.single('file'), as
   }
 });
 
-// Serve static files from frontend/dist in production (must be after API routes)
+// Get all customers
+app.get('/api/customers', authMiddleware, async (_req, res) => {
+  try {
+    const customers = await getAllCustomers();
+    res.json(customers);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error loading customers' });
+  }
+});
+
+// Get customer by ID with all quotes
+app.get('/api/customers/:id', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const customer = await getCustomerById(id);
+    if (!customer) {
+      return res.status(404).json({ message: 'Customer not found' });
+    }
+    const quotes = await getQuotesByCustomerId(id);
+    res.json({ ...customer, quotes });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error loading customer' });
+  }
+});
+
+// Create or find customer
+app.post('/api/customers', authMiddleware, async (req, res) => {
+  const { name } = req.body || {};
+  if (!name || !name.trim()) {
+    return res.status(400).json({ message: 'Customer name is required' });
+  }
+  try {
+    const customer = await findOrCreateCustomer(name.trim());
+    res.status(201).json(customer);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error creating customer' });
+  }
+});
+
+// Serve static files from frontend/dist in production (must be after ALL API routes)
 if (process.env.NODE_ENV === 'production') {
   const frontendDist = path.join(__dirname, 'frontend', 'dist');
   app.use(express.static(frontendDist));
@@ -304,15 +365,16 @@ if (process.env.NODE_ENV === 'production') {
     if (path === '?' || path === '/?' || path.trim() === '') {
       return res.redirect('/');
     }
-    
-    res.status(404).json({ 
+
+    res.status(404).json({
       error: 'Not Found',
       message: `Cannot ${req.method} ${path || req.url}`,
       availableEndpoints: {
         root: 'GET /',
         health: 'GET /api/health',
         auth: 'POST /api/auth/login, POST /api/auth/register',
-        quotes: 'GET /api/quotes, POST /api/quotes, PUT /api/quotes/:id, PATCH /api/quotes/:id/stage'
+        quotes: 'GET /api/quotes, POST /api/quotes, PUT /api/quotes/:id, PATCH /api/quotes/:id/stage',
+        customers: 'GET /api/customers, GET /api/customers/:id, POST /api/customers'
       }
     });
   });
