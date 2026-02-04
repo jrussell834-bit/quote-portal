@@ -6,6 +6,7 @@ import {
   type DropResult
 } from '@hello-pangea/dnd';
 import { createQuote, fetchQuotes, updateQuoteStage, uploadQuoteAttachment, updateQuote, fetchCustomers, createCustomer, type Customer } from '../api';
+import { Footer } from './Footer';
 
 type StageKey = 'new' | 'follow_up' | 'tender' | 'won' | 'lost';
 
@@ -244,7 +245,7 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
   };
 
   return (
-    <div className="min-h-screen bg-slate-100">
+    <div className="min-h-screen bg-slate-100 flex flex-col">
       <header className="border-b border-slate-200 bg-white/80 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
@@ -689,6 +690,7 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
           </div>
         </div>
       )}
+      <Footer />
     </div>
   );
 };
