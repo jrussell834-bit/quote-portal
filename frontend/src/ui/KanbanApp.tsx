@@ -183,21 +183,24 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
 
     setCreating(true);
     try {
-      let customerId = selectedCustomerId || undefined;
+      let customerId: string | undefined = undefined;
       
       // If creating a new customer
       if (isCreatingNewCustomer && newCustomerName.trim()) {
         const newCustomer = await createCustomer(newCustomerName.trim());
         customerId = newCustomer.id;
         await loadCustomers(); // Refresh customer list
+      } else if (selectedCustomerId && selectedCustomerId.trim()) {
+        // Use selected customer
+        customerId = selectedCustomerId.trim();
       }
 
       const valueNumber = newQuoteValue ? Number(newQuoteValue) : undefined;
       const payload: Partial<QuoteCard> = {
         title: newQuoteTitle.trim(),
         clientName: newQuoteClient.trim(),
-        customerId: customerId || undefined,
-        customerName: isCreatingNewCustomer ? newCustomerName.trim() : (customers.find(c => c.id === customerId)?.name || undefined),
+        customerId: customerId,
+        customerName: isCreatingNewCustomer ? newCustomerName.trim() : (customerId ? customers.find(c => c.id === customerId)?.name : undefined),
         value: Number.isNaN(valueNumber) ? undefined : valueNumber,
         stage: 'new',
         reminderEmail: newQuoteEmail || undefined,
