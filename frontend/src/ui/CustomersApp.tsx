@@ -43,9 +43,8 @@ export const CustomersApp: React.FC<{ onNavigateToKanban: () => void }> = ({ onN
   const getStageColor = (stage: QuoteCard['stage']) => {
     const colors: Record<QuoteCard['stage'], string> = {
       new: 'bg-blue-100 text-blue-700',
-      sent: 'bg-purple-100 text-purple-700',
       follow_up: 'bg-yellow-100 text-yellow-700',
-      negotiation: 'bg-orange-100 text-orange-700',
+      tender: 'bg-orange-100 text-orange-700',
       won: 'bg-green-100 text-green-700',
       lost: 'bg-red-100 text-red-700'
     };
@@ -55,9 +54,8 @@ export const CustomersApp: React.FC<{ onNavigateToKanban: () => void }> = ({ onN
   const getStageName = (stage: QuoteCard['stage']) => {
     const names: Record<QuoteCard['stage'], string> = {
       new: 'New',
-      sent: 'Sent',
       follow_up: 'Follow-up',
-      negotiation: 'Negotiation',
+      tender: 'Tender',
       won: 'Won',
       lost: 'Lost'
     };

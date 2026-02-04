@@ -7,7 +7,7 @@ import {
 } from '@hello-pangea/dnd';
 import { createQuote, fetchQuotes, updateQuoteStage, uploadQuoteAttachment, updateQuote, fetchCustomers, createCustomer, type Customer } from '../api';
 
-type StageKey = 'new' | 'sent' | 'follow_up' | 'negotiation' | 'won' | 'lost';
+type StageKey = 'new' | 'follow_up' | 'tender' | 'won' | 'lost';
 
 export type QuoteCard = {
   id: string;
@@ -27,9 +27,8 @@ export type QuoteCard = {
 
 const STAGES: { id: StageKey; title: string }[] = [
   { id: 'new', title: 'New' },
-  { id: 'sent', title: 'Sent' },
   { id: 'follow_up', title: 'Follow-up' },
-  { id: 'negotiation', title: 'Negotiation' },
+  { id: 'tender', title: 'Tender' },
   { id: 'won', title: 'Won' },
   { id: 'lost', title: 'Lost' }
 ];
