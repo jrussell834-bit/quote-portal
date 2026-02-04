@@ -141,6 +141,7 @@ export type Activity = {
   type: string;
   subject?: string | null;
   description?: string | null;
+  attachmentUrl?: string | null;
   activityDate: string;
   contactName?: string | null;
   quoteTitle?: string | null;
@@ -215,6 +216,16 @@ export async function fetchActivitiesByCustomerId(customerId: string): Promise<A
 
 export async function createActivity(customerId: string, payload: Partial<Activity>): Promise<Activity> {
   const res = await api.post<Activity>(`/customers/${customerId}/activities`, payload);
+  return res.data;
+}
+
+export async function uploadActivityAttachment(customerId: string, activityId: string, file: File): Promise<Activity> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await api.post<Activity>(`/customers/${customerId}/activities/${activityId}/attachment`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
   return res.data;
 }
 

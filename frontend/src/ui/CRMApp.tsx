@@ -7,6 +7,7 @@ import {
   createContact,
   fetchActivitiesByCustomerId,
   createActivity,
+  uploadActivityAttachment,
   fetchTasksByCustomerId,
   fetchAllTasks,
   createTask,
@@ -57,6 +58,7 @@ export const CRMApp: React.FC<{ onNavigateToDashboard: () => void }> = ({ onNavi
   const [activitySubject, setActivitySubject] = useState('');
   const [activityDescription, setActivityDescription] = useState('');
   const [activityDate, setActivityDate] = useState(new Date().toISOString().split('T')[0]);
+  const [activityFile, setActivityFile] = useState<File | null>(null);
 
   // Task form state
   const [taskTitle, setTaskTitle] = useState('');
@@ -200,12 +202,20 @@ export const CRMApp: React.FC<{ onNavigateToDashboard: () => void }> = ({ onNavi
         description: activityDescription.trim() || undefined,
         activityDate: activityDate || new Date().toISOString().split('T')[0]
       });
-      setActivities([newActivity, ...activities]);
+      
+      // Upload file if provided
+      let finalActivity = newActivity;
+      if (activityFile) {
+        finalActivity = await uploadActivityAttachment(selectedCustomer.id, newActivity.id, activityFile);
+      }
+      
+      setActivities([finalActivity, ...activities]);
       setIsAddingActivity(false);
       setActivityType('call');
       setActivitySubject('');
       setActivityDescription('');
       setActivityDate(new Date().toISOString().split('T')[0]);
+      setActivityFile(null);
     } catch (err: any) {
       console.error('Create activity error:', err);
       const errorMessage = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Unable to create activity. Please try again.';
@@ -741,6 +751,18 @@ export const CRMApp: React.FC<{ onNavigateToDashboard: () => void }> = ({ onNavi
                           className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none ring-blue-500/0 transition focus:bg-white focus:ring-2"
                         />
                       </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs font-medium text-slate-600">Upload Email/File</span>
+                        <input
+                          type="file"
+                          accept=".eml,.msg,.pdf,.txt"
+                          onChange={(e) => setActivityFile(e.target.files?.[0] || null)}
+                          className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none ring-blue-500/0 transition focus:bg-white focus:ring-2"
+                        />
+                        <p className="text-xs text-slate-500 mt-1">
+                          Supported: .eml, .msg, .pdf, .txt
+                        </p>
+                      </label>
                       <div className="flex justify-end gap-2">
                         <button
                           type="button"
@@ -777,6 +799,21 @@ export const CRMApp: React.FC<{ onNavigateToDashboard: () => void }> = ({ onNavi
                               </div>
                               {activity.description && (
                                 <p className="mt-1 text-xs text-slate-600">{activity.description}</p>
+                              )}
+                              {activity.attachmentUrl && (
+                                <div className="mt-2">
+                                  <a
+                                    href={activity.attachmentUrl.startsWith('http') ? activity.attachmentUrl : `${window.location.origin}${activity.attachmentUrl}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                                  >
+                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                    </svg>
+                                    View Email Attachment
+                                  </a>
+                                </div>
                               )}
                               <p className="mt-1 text-xs text-slate-500">
                                 {new Date(activity.activityDate).toLocaleString()}
