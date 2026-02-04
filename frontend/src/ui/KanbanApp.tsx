@@ -221,9 +221,10 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
       setIsNewModalOpen(false);
       resetNewQuoteForm();
       setError(null);
-    } catch (err) {
-      console.error(err);
-      setError('Unable to create quote. Please try again.');
+    } catch (err: any) {
+      console.error('Create quote error:', err);
+      const errorMessage = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Unable to create quote. Please try again.';
+      setError(errorMessage);
     } finally {
       setCreating(false);
     }
