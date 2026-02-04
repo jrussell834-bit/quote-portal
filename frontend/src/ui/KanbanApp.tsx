@@ -104,9 +104,22 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void; onNavigate
     if (!filter.trim()) return quotes;
     const term = filter.toLowerCase();
     return quotes.filter(
-      (q) =>
-        q.title.toLowerCase().includes(term) ||
-        q.clientName.toLowerCase().includes(term)
+      (q) => {
+        // Search in multiple fields
+        const searchFields = [
+          q.title?.toLowerCase() || '',
+          q.clientName?.toLowerCase() || '',
+          q.customerName?.toLowerCase() || '',
+          q.notes?.toLowerCase() || '',
+          q.soNumber?.toLowerCase() || '',
+          q.status?.toLowerCase() || '',
+          q.createdByName?.toLowerCase() || '',
+          q.reminderEmail?.toLowerCase() || '',
+          q.value?.toString() || '',
+        ];
+        // Check if any field contains the search term
+        return searchFields.some(field => field.includes(term));
+      }
     );
   }, [quotes, filter]);
 
@@ -449,7 +462,7 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void; onNavigate
           <div className="flex items-center gap-3">
             <input
               type="search"
-              placeholder="Search by client or quote..."
+              placeholder="Search leads by keyword..."
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               className="w-64 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm outline-none ring-brand-500/0 transition focus:bg-white focus:ring-2"
