@@ -328,14 +328,23 @@ app.listen(PORT, () => {
     .catch((err) => {
       console.error('[db] Failed to initialise database:', err);
       console.error('[db] Server is running but database operations will fail');
-      console.error('[db] Make sure Postgres is running and connection settings are correct');
-      console.error('[db] Connection details:', {
-        host: process.env.PGHOST || 'localhost',
-        port: process.env.PGPORT || 5432,
-        database: process.env.PGDATABASE || 'quoteportal',
-        hasUrl: !!process.env.DATABASE_URL
-      });
-      console.error('[db] To start Postgres with Docker: docker compose up -d db');
+      
+      if (process.env.DATABASE_URL) {
+        console.error('[db] DATABASE_URL is set but connection failed');
+        console.error('[db] On Railway: Make sure PostgreSQL service is added and running');
+        console.error('[db] Check Railway dashboard → Your project → PostgreSQL service');
+      } else {
+        console.error('[db] DATABASE_URL not set - using individual connection parameters');
+        console.error('[db] Make sure Postgres is running and connection settings are correct');
+        console.error('[db] Connection details:', {
+          host: process.env.PGHOST || 'localhost',
+          port: process.env.PGPORT || 5432,
+          database: process.env.PGDATABASE || 'quoteportal',
+          hasUrl: !!process.env.DATABASE_URL
+        });
+        console.error('[db] To start Postgres with Docker: docker compose up -d db');
+        console.error('[db] On Railway: Add PostgreSQL service from Railway dashboard');
+      }
     });
 });
 

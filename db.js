@@ -2,21 +2,27 @@ const { Pool } = require('pg');
 
 const connectionString = process.env.DATABASE_URL;
 
+// Determine if we're on Railway (has DATABASE_URL) or local
+const isRailway = !!process.env.DATABASE_URL || !!process.env.RAILWAY_ENVIRONMENT;
+const needsSSL = isRailway || process.env.PGSSL === 'true';
+
 const pool =
   connectionString != null
     ? new Pool({
         connectionString,
-        ssl:
-          process.env.PGSSL === 'true'
-            ? { rejectUnauthorized: false }
-            : undefined
+        ssl: needsSSL
+          ? { rejectUnauthorized: false }
+          : undefined
       })
     : new Pool({
         host: process.env.PGHOST || 'localhost',
         port: Number(process.env.PGPORT || 5432),
         user: process.env.PGUSER || 'postgres',
         password: process.env.PGPASSWORD || 'postgres',
-        database: process.env.PGDATABASE || 'quoteportal'
+        database: process.env.PGDATABASE || 'quoteportal',
+        ssl: needsSSL
+          ? { rejectUnauthorized: false }
+          : undefined
       });
 
 async function initDb() {
