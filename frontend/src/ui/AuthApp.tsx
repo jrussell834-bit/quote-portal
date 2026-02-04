@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { KanbanApp } from './KanbanApp';
 import { CustomersApp } from './CustomersApp';
 import { CRMApp } from './CRMApp';
+import { TasksApp } from './TasksApp';
 import { login, register } from '../api';
 
 type Mode = 'login' | 'register';
-type View = 'kanban' | 'customers' | 'crm';
+type View = 'kanban' | 'customers' | 'crm' | 'tasks';
 
 export const AuthApp: React.FC = () => {
   const [mode, setMode] = useState<Mode>('login');
@@ -82,7 +83,10 @@ export const AuthApp: React.FC = () => {
       if (view === 'crm') {
         return <CRMApp onNavigateToDashboard={() => setView('kanban')} />;
       }
-      return <KanbanApp onNavigateToCustomers={() => setView('customers')} onNavigateToCRM={() => setView('crm')} />;
+      if (view === 'tasks') {
+        return <TasksApp onNavigateToDashboard={() => setView('kanban')} />;
+      }
+      return <KanbanApp onNavigateToCustomers={() => setView('customers')} onNavigateToCRM={() => setView('crm')} onNavigateToTasks={() => setView('tasks')} />;
   }
 
   return (

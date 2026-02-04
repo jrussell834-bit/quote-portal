@@ -150,9 +150,11 @@ export type Activity = {
 
 export type Task = {
   id: string;
-  customerId: string;
+  customerId?: string | null;
   contactId?: string | null;
   quoteId?: string | null;
+  assignedTo?: string | null;
+  assignedToName?: string | null;
   title: string;
   description?: string | null;
   dueDate?: string | null;
@@ -219,6 +221,11 @@ export async function createActivity(customerId: string, payload: Partial<Activi
 // Task API functions
 export async function fetchAllTasks(): Promise<Task[]> {
   const res = await api.get<Task[]>('/tasks');
+  return res.data;
+}
+
+export async function fetchMyTasks(): Promise<Task[]> {
+  const res = await api.get<Task[]>('/tasks/my');
   return res.data;
 }
 
