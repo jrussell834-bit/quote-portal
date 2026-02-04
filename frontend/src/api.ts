@@ -1,8 +1,27 @@
 import axios from 'axios';
 import type { QuoteCard } from './ui/KanbanApp';
 
+// Determine API URL based on environment
+const getApiUrl = () => {
+  // In production (Railway), use the environment variable or relative URL
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  // If we're on Railway and no explicit URL, try to detect from window location
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    // If not localhost, assume we're on Railway and use relative path
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      // Try to use the same domain with /api
+      return `${window.location.protocol}//${window.location.host}/api`;
+    }
+  }
+  // Default to localhost for development
+  return 'http://localhost:4000/api';
+};
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:4000/api'
+  baseURL: getApiUrl()
 });
 
 api.interceptors.request.use((config) => {

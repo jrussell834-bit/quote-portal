@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
+    "build": "cd frontend && npm install && npm run build",
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev:frontend": "cd frontend && npm run dev",
     "dev:all": "concurrently \"npm run dev\" \"npm run dev:frontend\""

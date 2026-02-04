@@ -28,6 +28,44 @@ const uploadsDir = path.join(__dirname, 'uploads');
 const upload = multer({ dest: uploadsDir });
 app.use('/uploads', express.static(uploadsDir));
 
+// Serve static files from frontend/dist in production
+if (process.env.NODE_ENV === 'production') {
+  const frontendDist = path.join(__dirname, 'frontend', 'dist');
+  app.use(express.static(frontendDist));
+  
+  // Handle React Router - serve index.html for all non-API routes
+  app.get('*', (req, res, next) => {
+    // Skip API routes and static file routes
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+      return next();
+    }
+    // Serve index.html for all other routes (React Router)
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+}
+
+// Root route
+app.get('/', (_req, res) => {
+  res.json({ 
+    message: 'Quote Portal API',
+    version: '1.0.0',
+    endpoints: {
+      health: '/api/health',
+      auth: {
+        register: 'POST /api/auth/register',
+        login: 'POST /api/auth/login'
+      },
+      quotes: {
+        list: 'GET /api/quotes',
+        create: 'POST /api/quotes',
+        update: 'PUT /api/quotes/:id',
+        updateStage: 'PATCH /api/quotes/:id/stage',
+        uploadAttachment: 'POST /api/quotes/:id/attachment'
+      }
+    }
+  });
+});
+
 // Simple health check (before DB init, so it works even if DB fails)
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -235,9 +273,50 @@ app.post('/api/quotes/:id/attachment', authMiddleware, upload.single('file'), as
   }
 });
 
+// Serve static files from frontend/dist in production (must be after API routes)
+if (process.env.NODE_ENV === 'production') {
+  const frontendDist = path.join(__dirname, 'frontend', 'dist');
+  app.use(express.static(frontendDist));
+  
+  // Handle React Router - serve index.html for all non-API routes
+  app.get('*', (req, res) => {
+    // Skip API routes and static file routes
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+      return res.status(404).json({ 
+        error: 'Not Found',
+        message: `Cannot ${req.method} ${req.path}`
+      });
+    }
+    // Serve index.html for all other routes (React Router)
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+} else {
+  // 404 handler for unknown routes (development only)
+  app.use((req, res) => {
+    // Handle malformed URLs (like just "?")
+    const path = req.path || req.url;
+    if (path === '?' || path === '/?' || path.trim() === '') {
+      return res.redirect('/');
+    }
+    
+    res.status(404).json({ 
+      error: 'Not Found',
+      message: `Cannot ${req.method} ${path || req.url}`,
+      availableEndpoints: {
+        root: 'GET /',
+        health: 'GET /api/health',
+        auth: 'POST /api/auth/login, POST /api/auth/register',
+        quotes: 'GET /api/quotes, POST /api/quotes, PUT /api/quotes/:id, PATCH /api/quotes/:id/stage'
+      }
+    });
+  });
+}
+
 // Start server immediately, then initialize DB
 app.listen(PORT, () => {
   console.log(`API server listening on port ${PORT}`);
+  console.log(`API available at: http://localhost:${PORT}`);
+  console.log(`Health check: http://localhost:${PORT}/api/health`);
   
   // Initialize database in background
   initDb()
