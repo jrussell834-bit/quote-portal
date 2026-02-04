@@ -147,6 +147,11 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
     setIsNewModalOpen(true);
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('auth_token');
+    window.location.reload();
+  };
+
   const handleEditQuote = (quote: QuoteCard) => {
     setEditingQuote(quote);
     setEditNotes(quote.notes || '');
@@ -277,6 +282,14 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
               className="rounded-lg border border-blue-600 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 shadow-sm hover:bg-blue-50 disabled:opacity-60"
             >
               New lead
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+              title="Logout"
+            >
+              Logout
             </button>
           </div>
         </div>

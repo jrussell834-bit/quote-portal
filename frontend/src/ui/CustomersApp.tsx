@@ -9,6 +9,11 @@ export const CustomersApp: React.FC<{ onNavigateToKanban: () => void }> = ({ onN
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
+  const handleLogout = () => {
+    localStorage.removeItem('auth_token');
+    window.location.reload();
+  };
+
   useEffect(() => {
     loadCustomers();
   }, []);
@@ -88,6 +93,13 @@ export const CustomersApp: React.FC<{ onNavigateToKanban: () => void }> = ({ onN
               className="rounded-lg border border-blue-600 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 shadow-sm hover:bg-blue-50"
             >
               Kanban View
+            </button>
+            <button
+              onClick={handleLogout}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+              title="Logout"
+            >
+              Logout
             </button>
           </div>
         </header>
@@ -195,6 +207,13 @@ export const CustomersApp: React.FC<{ onNavigateToKanban: () => void }> = ({ onN
             className="rounded-lg border border-blue-600 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 shadow-sm hover:bg-blue-50"
           >
             Kanban View
+          </button>
+          <button
+            onClick={handleLogout}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            title="Logout"
+          >
+            Logout
           </button>
         </div>
       </header>
