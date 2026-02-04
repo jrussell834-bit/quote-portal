@@ -4,6 +4,9 @@ const multer = require('multer');
 const path = require('path');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const { body, validationResult } = require('express-validator');
 const {
   initDb,
   getAllQuotes,
@@ -37,12 +40,84 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 
-app.use(cors());
-app.use(express.json());
+// Validate required environment variables in production
+if (process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT) {
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'dev-secret-change-me') {
+    console.error('[SECURITY] WARNING: JWT_SECRET must be set to a secure random string in production!');
+  }
+  if (!process.env.DATABASE_URL) {
+    console.error('[SECURITY] ERROR: DATABASE_URL is required in production!');
+    process.exit(1);
+  }
+}
+
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Needed for Vite in dev
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'", "data:"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
+    },
+  },
+  crossOriginEmbedderPolicy: false, // Allow iframe for PDF preview
+}));
+
+// CORS configuration
+app.use(cors({
+  origin: process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? false : true),
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+// Body parser with size limits
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Rate limiting for authentication endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 requests per windowMs
+  message: 'Too many authentication attempts, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// General API rate limiting
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 100, // Limit each IP to 100 requests per minute
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply rate limiting to API routes
+app.use('/api', apiLimiter);
 
 // Static serving for uploaded quote files
 const uploadsDir = path.join(__dirname, 'uploads');
-const upload = multer({ dest: uploadsDir });
+const upload = multer({ 
+  dest: uploadsDir,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Allow only PDF files
+    const allowedMimes = ['application/pdf'];
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'), false);
+    }
+  }
+});
 app.use('/uploads', express.static(uploadsDir));
 
 // Simple health check (before DB init, so it works even if DB fails)
@@ -65,31 +140,75 @@ function authMiddleware(req, res, next) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
   const token = header.slice('Bearer '.length);
+  
+  // Validate token format
+  if (!token || token.length < 10) {
+    return res.status(401).json({ message: 'Invalid token format' });
+  }
+  
   try {
     const payload = jwt.verify(token, JWT_SECRET);
     req.user = payload;
     next();
-  } catch {
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      return res.status(401).json({ message: 'Token expired' });
+    }
     return res.status(401).json({ message: 'Invalid token' });
   }
 }
 
-// Register
-app.post('/api/auth/register', async (req, res) => {
-  const { username, password } = req.body || {};
-  if (!username || !password || password.length < 6) {
-    return res
-      .status(400)
-      .json({ message: 'Username and password (min 6 chars) are required' });
+// Password validation helper
+function validatePassword(password) {
+  if (!password || password.length < 8) {
+    return { valid: false, message: 'Password must be at least 8 characters long' };
   }
+  if (!/[A-Z]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least one uppercase letter' };
+  }
+  if (!/[a-z]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least one lowercase letter' };
+  }
+  if (!/[0-9]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least one number' };
+  }
+  return { valid: true };
+}
+
+// Input sanitization helper
+function sanitizeInput(input) {
+  if (typeof input !== 'string') return input;
+  return input.trim().replace(/[<>]/g, '');
+}
+
+// Register
+app.post('/api/auth/register', authLimiter, [
+  body('username').trim().isLength({ min: 3, max: 50 }).matches(/^[a-zA-Z0-9_]+$/).withMessage('Username must be 3-50 characters and contain only letters, numbers, and underscores'),
+  body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ message: errors.array()[0].msg });
+  }
+
+  const { username, password } = req.body || {};
+  const sanitizedUsername = sanitizeInput(username);
+  
+  // Additional password strength validation
+  const passwordValidation = validatePassword(password);
+  if (!passwordValidation.valid) {
+    return res.status(400).json({ message: passwordValidation.message });
+  }
+
   try {
     // Use username as the email identifier in the database
-    const email = username.toLowerCase().trim();
+    const email = sanitizedUsername.toLowerCase();
     const existing = await findUserByEmail(email);
     if (existing) {
       return res.status(409).json({ message: 'Username already in use' });
     }
-    const passwordHash = await bcrypt.hash(password, 10);
+    // Increase bcrypt rounds for better security
+    const passwordHash = await bcrypt.hash(password, 12);
     const user = await createUser({ email, passwordHash });
     const token = generateToken(user);
     res.status(201).json({ token, user: { id: user.id, email: user.email } });
@@ -97,7 +216,7 @@ app.post('/api/auth/register', async (req, res) => {
     console.error('[register] Error:', err);
     const message = err.code === '23505' 
       ? 'Username already in use' 
-      : err.message || 'Error registering user';
+      : 'Error registering user';
     res.status(500).json({ message });
   }
 });
@@ -292,9 +411,29 @@ app.post('/api/quotes/:id/attachment', authMiddleware, upload.single('file'), as
   if (!req.file) {
     return res.status(400).json({ message: 'File is required' });
   }
+  
+  // Validate file type
+  if (req.file.mimetype !== 'application/pdf') {
+    // Delete the uploaded file if it's not a PDF
+    const fs = require('fs');
+    try {
+      fs.unlinkSync(req.file.path);
+    } catch (err) {
+      console.error('[upload] Error deleting invalid file:', err);
+    }
+    return res.status(400).json({ message: 'Only PDF files are allowed' });
+  }
+  
   try {
     const quote = await getQuoteById(id);
     if (!quote) {
+      // Delete uploaded file if quote not found
+      const fs = require('fs');
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (err) {
+        console.error('[upload] Error deleting file:', err);
+      }
       return res.status(404).json({ message: 'Quote not found' });
     }
     const attachmentUrl = `/uploads/${req.file.filename}`;
@@ -302,6 +441,13 @@ app.post('/api/quotes/:id/attachment', authMiddleware, upload.single('file'), as
     res.json(updated);
   } catch (err) {
     console.error(err);
+    // Delete uploaded file on error
+    const fs = require('fs');
+    try {
+      if (req.file) fs.unlinkSync(req.file.path);
+    } catch (unlinkErr) {
+      console.error('[upload] Error deleting file on error:', unlinkErr);
+    }
     res.status(500).json({ message: 'Error saving attachment' });
   }
 });

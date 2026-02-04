@@ -424,7 +424,7 @@ async function getAllQuotes() {
     from quotes q
     left join customers c on q.customer_id = c.id
     left join users u on q.created_by = u.id
-    order by q.stage, q.position asc, q.created_at desc
+    order by q.stage, q.position asc, q.next_chase_at nulls last, q.created_at desc
   `);
   return rows.map(toQuoteDomain);
 }
