@@ -114,7 +114,19 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void; onNavigate
       STAGES.reduce<Record<StageKey, QuoteCard[]>>((acc, stage) => {
         const stageQuotes = filteredQuotes
           .filter((q) => q.stage === stage.id)
-          .sort((a, b) => (a.position || 0) - (b.position || 0));
+          .sort((a, b) => {
+            // First sort by position if available
+            const posDiff = (a.position || 0) - (b.position || 0);
+            if (posDiff !== 0) return posDiff;
+            
+            // Then sort by next chase date (earliest first, nulls last)
+            if (a.nextChaseAt && b.nextChaseAt) {
+              return new Date(a.nextChaseAt).getTime() - new Date(b.nextChaseAt).getTime();
+            }
+            if (a.nextChaseAt) return -1; // a has date, b doesn't - a comes first
+            if (b.nextChaseAt) return 1;  // b has date, a doesn't - b comes first
+            return 0; // both null, maintain order
+          });
         acc[stage.id] = stageQuotes;
         return acc;
       }, {} as Record<StageKey, QuoteCard[]>),
