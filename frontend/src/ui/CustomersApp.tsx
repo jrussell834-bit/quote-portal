@@ -51,6 +51,7 @@ export const CustomersApp: React.FC<{ onNavigateToKanban: () => void }> = ({ onN
       new: 'bg-blue-100 text-blue-700',
       follow_up: 'bg-yellow-100 text-yellow-700',
       tender: 'bg-orange-100 text-orange-700',
+      otp: 'bg-purple-100 text-purple-700',
       won: 'bg-green-100 text-green-700',
       lost: 'bg-red-100 text-red-700'
     };
@@ -62,6 +63,7 @@ export const CustomersApp: React.FC<{ onNavigateToKanban: () => void }> = ({ onN
       new: 'New',
       follow_up: 'Follow-up',
       tender: 'Tender',
+      otp: 'OTP',
       won: 'Won',
       lost: 'Lost'
     };

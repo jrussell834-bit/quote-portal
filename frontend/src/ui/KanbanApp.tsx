@@ -8,7 +8,7 @@ import {
 import { createQuote, fetchQuotes, updateQuotePositions, uploadQuoteAttachment, updateQuote, fetchCustomers, createCustomer, type Customer } from '../api';
 import { Footer } from './Footer';
 
-type StageKey = 'new' | 'follow_up' | 'tender' | 'won' | 'lost';
+type StageKey = 'new' | 'follow_up' | 'tender' | 'otp' | 'won' | 'lost';
 
 export type QuoteCard = {
   id: string;
@@ -36,6 +36,7 @@ const STAGES: { id: StageKey; title: string }[] = [
   { id: 'new', title: 'New' },
   { id: 'follow_up', title: 'Follow-up' },
   { id: 'tender', title: 'Tender' },
+  { id: 'otp', title: 'OTP' },
   { id: 'won', title: 'Won' },
   { id: 'lost', title: 'Lost' }
 ];
