@@ -106,12 +106,63 @@ export async function login(username: string, password: string) {
 export type Customer = {
   id: string;
   name: string;
+  email?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  address?: string | null;
+  industry?: string | null;
+  notes?: string | null;
   createdAt: string;
   updatedAt: string;
 };
 
 export type CustomerWithQuotes = Customer & {
   quotes: QuoteCard[];
+};
+
+export type Contact = {
+  id: string;
+  customerId: string;
+  firstName: string;
+  lastName: string;
+  email?: string | null;
+  phone?: string | null;
+  jobTitle?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Activity = {
+  id: string;
+  customerId: string;
+  contactId?: string | null;
+  quoteId?: string | null;
+  type: string;
+  subject?: string | null;
+  description?: string | null;
+  activityDate: string;
+  contactName?: string | null;
+  quoteTitle?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Task = {
+  id: string;
+  customerId: string;
+  contactId?: string | null;
+  quoteId?: string | null;
+  title: string;
+  description?: string | null;
+  dueDate?: string | null;
+  completed: boolean;
+  priority: 'low' | 'medium' | 'high';
+  contactName?: string | null;
+  quoteTitle?: string | null;
+  customerName?: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export async function fetchCustomers(): Promise<Customer[]> {
@@ -126,6 +177,63 @@ export async function fetchCustomerById(id: string): Promise<CustomerWithQuotes>
 
 export async function createCustomer(name: string): Promise<Customer> {
   const res = await api.post<Customer>('/customers', { name });
+  return res.data;
+}
+
+export async function updateCustomer(id: string, payload: Partial<Customer>): Promise<Customer> {
+  const res = await api.put<Customer>(`/customers/${id}`, payload);
+  return res.data;
+}
+
+// Contact API functions
+export async function fetchContactsByCustomerId(customerId: string): Promise<Contact[]> {
+  const res = await api.get<Contact[]>(`/customers/${customerId}/contacts`);
+  return res.data;
+}
+
+export async function createContact(customerId: string, payload: Partial<Contact>): Promise<Contact> {
+  const res = await api.post<Contact>(`/customers/${customerId}/contacts`, payload);
+  return res.data;
+}
+
+export async function updateContact(id: string, payload: Partial<Contact>): Promise<Contact> {
+  const res = await api.put<Contact>(`/contacts/${id}`, payload);
+  return res.data;
+}
+
+export async function deleteContact(id: string): Promise<void> {
+  await api.delete(`/contacts/${id}`);
+}
+
+// Activity API functions
+export async function fetchActivitiesByCustomerId(customerId: string): Promise<Activity[]> {
+  const res = await api.get<Activity[]>(`/customers/${customerId}/activities`);
+  return res.data;
+}
+
+export async function createActivity(customerId: string, payload: Partial<Activity>): Promise<Activity> {
+  const res = await api.post<Activity>(`/customers/${customerId}/activities`, payload);
+  return res.data;
+}
+
+// Task API functions
+export async function fetchAllTasks(): Promise<Task[]> {
+  const res = await api.get<Task[]>('/tasks');
+  return res.data;
+}
+
+export async function fetchTasksByCustomerId(customerId: string): Promise<Task[]> {
+  const res = await api.get<Task[]>(`/customers/${customerId}/tasks`);
+  return res.data;
+}
+
+export async function createTask(payload: Partial<Task>): Promise<Task> {
+  const res = await api.post<Task>('/tasks', payload);
+  return res.data;
+}
+
+export async function updateTask(id: string, payload: Partial<Task>): Promise<Task> {
+  const res = await api.put<Task>(`/tasks/${id}`, payload);
   return res.data;
 }
 
