@@ -5,7 +5,7 @@ import {
   Draggable,
   type DropResult
 } from '@hello-pangea/dnd';
-import { createQuote, fetchQuotes, updateQuoteStage, uploadQuoteAttachment, updateQuote, fetchCustomers, createCustomer, type Customer } from '../api';
+import { createQuote, fetchQuotes, updateQuotePositions, uploadQuoteAttachment, updateQuote, fetchCustomers, createCustomer, type Customer } from '../api';
 import { Footer } from './Footer';
 
 type StageKey = 'new' | 'follow_up' | 'tender' | 'won' | 'lost';
@@ -18,6 +18,7 @@ export type QuoteCard = {
   customerName?: string | null;
   value?: number;
   stage: StageKey;
+  position?: number;
   lastChasedAt?: string;
   nextChaseAt?: string;
   reminderEmail?: string;
@@ -95,7 +96,10 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
   const quotesByStage = useMemo(
     () =>
       STAGES.reduce<Record<StageKey, QuoteCard[]>>((acc, stage) => {
-        acc[stage.id] = filteredQuotes.filter((q) => q.stage === stage.id);
+        const stageQuotes = filteredQuotes
+          .filter((q) => q.stage === stage.id)
+          .sort((a, b) => (a.position || 0) - (b.position || 0));
+        acc[stage.id] = stageQuotes;
         return acc;
       }, {} as Record<StageKey, QuoteCard[]>),
     [filteredQuotes]
@@ -116,16 +120,83 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
       return;
     }
 
-    const stageId = destination.droppableId as StageKey;
-    // optimistic update
-    setQuotes((prev) =>
-      prev.map((q) => (q.id === draggableId ? { ...q, stage: stageId } : q))
-    );
+    const sourceStage = source.droppableId as StageKey;
+    const destStage = destination.droppableId as StageKey;
+    const destIndex = destination.index;
+
+    // Get all quotes in the destination stage (after filtering)
+    const destStageQuotes = quotesByStage[destStage] || [];
+    
+    // Calculate new positions for all affected quotes
+    const updates: Array<{ id: string; position: number; stage: StageKey }> = [];
+    
+    if (sourceStage === destStage) {
+      // Reordering within the same column
+      const sourceQuotes = [...destStageQuotes];
+      const [movedQuote] = sourceQuotes.splice(source.index, 1);
+      sourceQuotes.splice(destIndex, 0, movedQuote);
+      
+      // Update positions for all quotes in this stage
+      sourceQuotes.forEach((quote, index) => {
+        updates.push({
+          id: quote.id,
+          position: index + 1,
+          stage: destStage
+        });
+      });
+    } else {
+      // Moving between columns
+      const sourceQuotes = [...(quotesByStage[sourceStage] || [])];
+      const destQuotes = [...destStageQuotes];
+      const [movedQuote] = sourceQuotes.splice(source.index, 1);
+      destQuotes.splice(destIndex, 0, { ...movedQuote, stage: destStage });
+      
+      // Update positions for source stage quotes
+      sourceQuotes.forEach((quote, index) => {
+        updates.push({
+          id: quote.id,
+          position: index + 1,
+          stage: sourceStage
+        });
+      });
+      
+      // Update positions for destination stage quotes
+      destQuotes.forEach((quote, index) => {
+        updates.push({
+          id: quote.id,
+          position: index + 1,
+          stage: destStage
+        });
+      });
+    }
+
+    // Optimistic update
+    setQuotes((prev) => {
+      const updated = [...prev];
+      const quoteIndex = updated.findIndex((q) => q.id === draggableId);
+      if (quoteIndex !== -1) {
+        updated[quoteIndex] = { ...updated[quoteIndex], stage: destStage };
+      }
+      // Re-sort by position
+      return updated.map((q) => {
+        const update = updates.find((u) => u.id === q.id);
+        return update ? { ...q, stage: update.stage, position: update.position } : q;
+      });
+    });
+
     try {
-      await updateQuoteStage(draggableId, stageId);
+      if (updates.length > 0) {
+        await updateQuotePositions(updates);
+        // Refresh quotes to get latest data
+        const refreshed = await fetchQuotes();
+        setQuotes(refreshed);
+      }
     } catch (err) {
       console.error(err);
-      setError('Unable to update quote stage.');
+      setError('Unable to update quote position.');
+      // Revert optimistic update on error
+      const refreshed = await fetchQuotes();
+      setQuotes(refreshed);
     }
   };
 

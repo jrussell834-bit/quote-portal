@@ -53,8 +53,13 @@ export async function fetchQuotes(): Promise<QuoteCard[]> {
   return res.data;
 }
 
-export async function updateQuoteStage(id: string, stage: QuoteCard['stage']) {
-  const res = await api.patch<QuoteCard>(`/quotes/${id}/stage`, { stage });
+export async function updateQuoteStage(id: string, stage: QuoteCard['stage'], position?: number) {
+  const res = await api.patch<QuoteCard>(`/quotes/${id}/stage`, { stage, position });
+  return res.data;
+}
+
+export async function updateQuotePositions(updates: Array<{ id: string; position: number; stage: QuoteCard['stage'] }>) {
+  const res = await api.patch<QuoteCard[]>('/quotes/positions', { updates });
   return res.data;
 }
 
