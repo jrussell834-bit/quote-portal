@@ -32,33 +32,6 @@ const uploadsDir = path.join(__dirname, 'uploads');
 const upload = multer({ dest: uploadsDir });
 app.use('/uploads', express.static(uploadsDir));
 
-// Root route
-app.get('/', (_req, res) => {
-  res.json({ 
-    message: 'Quote Portal API',
-    version: '1.0.0',
-      endpoints: {
-        health: '/api/health',
-        auth: {
-          register: 'POST /api/auth/register',
-          login: 'POST /api/auth/login'
-        },
-        quotes: {
-          list: 'GET /api/quotes',
-          create: 'POST /api/quotes',
-          update: 'PUT /api/quotes/:id',
-          updateStage: 'PATCH /api/quotes/:id/stage',
-          uploadAttachment: 'POST /api/quotes/:id/attachment'
-        },
-        customers: {
-          list: 'GET /api/customers',
-          getById: 'GET /api/customers/:id',
-          create: 'POST /api/customers'
-        }
-      }
-  });
-});
-
 // Simple health check (before DB init, so it works even if DB fails)
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -340,8 +313,66 @@ app.post('/api/customers', authMiddleware, async (req, res) => {
   }
 });
 
+// Root route - API info in development, frontend in production
+// Check for production environment (Railway sets RAILWAY_ENVIRONMENT or NODE_ENV)
+const isProduction = process.env.NODE_ENV === 'production' || 
+                     process.env.RAILWAY_ENVIRONMENT || 
+                     !process.env.NODE_ENV || 
+                     process.env.NODE_ENV !== 'development';
+
+app.get('/', (req, res) => {
+  if (isProduction) {
+    // In production, serve the frontend
+    const frontendDist = path.join(__dirname, 'frontend', 'dist');
+    const indexPath = path.join(frontendDist, 'index.html');
+    res.sendFile(indexPath, (err) => {
+      if (err) {
+        console.error('[server] Error serving frontend:', err);
+        // Fallback to API info if frontend not found
+        res.json({ 
+          message: 'Quote Portal API',
+          version: '1.0.0',
+          note: 'Frontend not found. Please ensure frontend/dist is built.',
+          endpoints: {
+            health: '/api/health',
+            auth: {
+              register: 'POST /api/auth/register',
+              login: 'POST /api/auth/login'
+            }
+          }
+        });
+      }
+    });
+  } else {
+    // In development, show API info
+    res.json({ 
+      message: 'Quote Portal API',
+      version: '1.0.0',
+      endpoints: {
+        health: '/api/health',
+        auth: {
+          register: 'POST /api/auth/register',
+          login: 'POST /api/auth/login'
+        },
+        quotes: {
+          list: 'GET /api/quotes',
+          create: 'POST /api/quotes',
+          update: 'PUT /api/quotes/:id',
+          updateStage: 'PATCH /api/quotes/:id/stage',
+          uploadAttachment: 'POST /api/quotes/:id/attachment'
+        },
+        customers: {
+          list: 'GET /api/customers',
+          getById: 'GET /api/customers/:id',
+          create: 'POST /api/customers'
+        }
+      }
+    });
+  }
+});
+
 // Serve static files from frontend/dist in production (must be after ALL API routes)
-if (process.env.NODE_ENV === 'production') {
+if (isProduction) {
   const frontendDist = path.join(__dirname, 'frontend', 'dist');
   app.use(express.static(frontendDist));
   
