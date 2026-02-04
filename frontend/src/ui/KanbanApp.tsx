@@ -41,7 +41,7 @@ const STAGES: { id: StageKey; title: string }[] = [
   { id: 'lost', title: 'Lost' }
 ];
 
-export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void; onNavigateToCRM?: () => void; onNavigateToTasks?: () => void }> = ({ onNavigateToCustomers, onNavigateToCRM, onNavigateToTasks }) => {
+export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void; onNavigateToCRM?: () => void; onNavigateToTasks?: () => void; onNavigateToAdmin?: () => void }> = ({ onNavigateToCustomers, onNavigateToCRM, onNavigateToTasks, onNavigateToAdmin }) => {
   const [quotes, setQuotes] = useState<QuoteCard[]>([]);
   const [filter, setFilter] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -490,6 +490,15 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void; onNavigate
                 className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
               >
                 My Tasks
+              </button>
+            )}
+            {onNavigateToAdmin && (
+              <button
+                type="button"
+                onClick={onNavigateToAdmin}
+                className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 shadow-sm hover:bg-red-50"
+              >
+                Admin
               </button>
             )}
             <button

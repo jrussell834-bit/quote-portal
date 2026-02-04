@@ -86,7 +86,7 @@ export async function uploadQuoteAttachment(id: string, file: File) {
 export async function register(username: string, password: string) {
   try {
     const res = await api.post('/auth/register', { username, password });
-    return res.data as { token: string; user: { id: string; email: string } };
+    return res.data as { message: string; user: { id: string; email: string; approved: boolean } };
   } catch (error: any) {
     console.error('Register API error:', error);
     throw error;
@@ -96,11 +96,34 @@ export async function register(username: string, password: string) {
 export async function login(username: string, password: string) {
   try {
     const res = await api.post('/auth/login', { username, password });
-    return res.data as { token: string; user: { id: string; email: string } };
+    return res.data as { token: string; user: { id: string; email: string; approved: boolean } };
   } catch (error: any) {
     console.error('Login API error:', error);
     throw error;
   }
+}
+
+export type User = {
+  id: string;
+  email: string;
+  approved: boolean;
+  createdAt: string;
+};
+
+// Admin API functions
+export async function fetchAllUsers(): Promise<User[]> {
+  const res = await api.get<User[]>('/admin/users');
+  return res.data;
+}
+
+export async function fetchPendingUsers(): Promise<User[]> {
+  const res = await api.get<User[]>('/admin/users/pending');
+  return res.data;
+}
+
+export async function approveUser(userId: string): Promise<{ message: string; user: User }> {
+  const res = await api.post<{ message: string; user: User }>(`/admin/users/${userId}/approve`);
+  return res.data;
 }
 
 export type Customer = {

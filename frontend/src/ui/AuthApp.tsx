@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { KanbanApp } from './KanbanApp';
 import { CustomersApp } from './CustomersApp';
 import { CRMApp } from './CRMApp';
 import { TasksApp } from './TasksApp';
+import { AdminApp } from './AdminApp';
 import { login, register } from '../api';
 
 type Mode = 'login' | 'register';
-type View = 'kanban' | 'customers' | 'crm' | 'tasks';
+type View = 'kanban' | 'customers' | 'crm' | 'tasks' | 'admin';
 
 export const AuthApp: React.FC = () => {
   const [mode, setMode] = useState<Mode>('login');
@@ -23,10 +24,19 @@ export const AuthApp: React.FC = () => {
     setAuthError(null);
     setLoading(true);
     try {
-      const action = mode === 'login' ? login : register;
-      const res = await action(username, password);
-      localStorage.setItem('auth_token', res.token);
-      window.location.reload();
+      if (mode === 'register') {
+        const res = await register(username, password);
+        // Registration successful but no token - show success message
+        setAuthError(null);
+        alert(res.message || 'Registration successful! Your account is pending admin approval. You will be able to login once an administrator approves your account.');
+        setMode('login');
+        setUsername('');
+        setPassword('');
+      } else {
+        const res = await login(username, password);
+        localStorage.setItem('auth_token', res.token);
+        window.location.reload();
+      }
     } catch (err: any) {
       console.error('Auth error:', err);
       let msg = err?.response?.data?.message || (mode === 'login' ? 'Login failed' : 'Registration failed');
@@ -76,7 +86,25 @@ export const AuthApp: React.FC = () => {
     }
   };
 
+  // Check if user is admin
+  const [isAdmin, setIsAdmin] = useState(false);
+  
+  useEffect(() => {
+    if (token) {
+      // Decode token to check if user is admin
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setIsAdmin(payload.email === 'admin');
+      } catch (err) {
+        setIsAdmin(false);
+      }
+    }
+  }, [token]);
+
   if (token) {
+      if (view === 'admin') {
+        return <AdminApp onNavigateToDashboard={() => setView('kanban')} />;
+      }
       if (view === 'customers') {
         return <CustomersApp onNavigateToKanban={() => setView('kanban')} />;
       }
@@ -86,7 +114,12 @@ export const AuthApp: React.FC = () => {
       if (view === 'tasks') {
         return <TasksApp onNavigateToDashboard={() => setView('kanban')} />;
       }
-      return <KanbanApp onNavigateToCustomers={() => setView('customers')} onNavigateToCRM={() => setView('crm')} onNavigateToTasks={() => setView('tasks')} />;
+      return <KanbanApp 
+        onNavigateToCustomers={() => setView('customers')} 
+        onNavigateToCRM={() => setView('crm')} 
+        onNavigateToTasks={() => setView('tasks')}
+        onNavigateToAdmin={isAdmin ? () => setView('admin') : undefined}
+      />;
   }
 
   return (
