@@ -55,6 +55,7 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [newCustomerName, setNewCustomerName] = useState('');
   const [isCreatingNewCustomer, setIsCreatingNewCustomer] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const loadCustomers = async () => {
     try {
@@ -99,7 +100,12 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
     [filteredQuotes]
   );
 
+  const onDragStart = () => {
+    setIsDragging(true);
+  };
+
   const onDragEnd = async (result: DropResult) => {
+    setIsDragging(false);
     const { destination, source, draggableId } = result;
     if (!destination) return;
     if (
@@ -285,7 +291,7 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
         {loading ? (
           <p className="text-sm text-slate-500">Loading quotes...</p>
         ) : null}
-        <DragDropContext onDragEnd={onDragEnd}>
+        <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
             {STAGES.map((stage) => {
               const items = quotesByStage[stage.id];
@@ -323,30 +329,29 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
                               <article
                                 ref={dragProvided.innerRef}
                                 {...dragProvided.draggableProps}
-                                {...dragProvided.dragHandleProps}
-                                className={`group relative rounded-xl bg-white p-3 text-left shadow-sm ring-1 ring-slate-200 transition hover:shadow-md cursor-grab active:cursor-grabbing ${
+                                onClick={(e) => {
+                                  // Only open edit modal if not dragging and not clicking on a button/link
+                                  if (!isDragging && !dragSnapshot.isDragging && 
+                                      !(e.target as HTMLElement).closest('button') &&
+                                      !(e.target as HTMLElement).closest('a')) {
+                                    handleEditQuote(quote);
+                                  }
+                                }}
+                                className={`group relative rounded-xl bg-white p-3 text-left shadow-sm ring-1 ring-slate-200 transition hover:shadow-md cursor-pointer ${
                                   dragSnapshot.isDragging
-                                    ? 'ring-blue-500 shadow-lg opacity-90'
-                                    : ''
+                                    ? 'ring-blue-500 shadow-lg opacity-90 cursor-grabbing'
+                                    : 'hover:ring-blue-300'
                                 }`}
                               >
-                                <div className="flex items-start justify-between gap-2 mb-1">
+                                <div
+                                  {...dragProvided.dragHandleProps}
+                                  className="absolute inset-0 cursor-grab active:cursor-grabbing"
+                                  style={{ zIndex: 0 }}
+                                />
+                                <div className="relative z-10 flex items-start justify-between gap-2 mb-1">
                                   <h3 className="line-clamp-2 text-sm font-semibold text-slate-900 flex-1">
                                     {quote.title}
                                   </h3>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleEditQuote(quote);
-                                    }}
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    className="flex-shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
-                                    title="Edit notes"
-                                  >
-                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                    </svg>
-                                  </button>
                                 </div>
                                 <p className="mb-1 text-xs font-medium text-slate-600">
                                   {quote.clientName}
