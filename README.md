@@ -90,6 +90,7 @@ PGSSL=false
 JWT_SECRET=your-secret-key-here
 
 # Email Configuration (optional - for reminders)
+# See SMTP_SETUP.md for detailed setup instructions
 SMTP_HOST=smtp.example.com
 SMTP_PORT=587
 SMTP_USER=your-email@example.com
