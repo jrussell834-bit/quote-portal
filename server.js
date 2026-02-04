@@ -222,28 +222,35 @@ app.post('/api/auth/register', authLimiter, [
 });
 
 // Login
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, [
+  body('username').trim().notEmpty().withMessage('Username is required'),
+  body('password').notEmpty().withMessage('Password is required'),
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ message: errors.array()[0].msg });
+  }
+
   const { username, password } = req.body || {};
-  console.log('[login] Attempt:', { username: username ? 'provided' : 'missing', hasPassword: !!password });
-  if (!username || !password) {
+  const sanitizedUsername = sanitizeInput(username);
+  
+  if (!sanitizedUsername || !password) {
     return res.status(400).json({ message: 'Username and password are required' });
   }
+  
   try {
     // Use username as the email identifier in the database
-    const email = username.toLowerCase().trim();
-    console.log('[login] Looking up user:', email);
+    const email = sanitizedUsername.toLowerCase();
     const user = await findUserByEmail(email);
     if (!user) {
-      console.log('[login] User not found:', email);
+      // Use same error message to prevent user enumeration
       return res.status(401).json({ message: 'Invalid credentials' });
     }
-    console.log('[login] User found, checking password');
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) {
-      console.log('[login] Password mismatch');
+      // Use same error message to prevent user enumeration
       return res.status(401).json({ message: 'Invalid credentials' });
     }
-    console.log('[login] Success for:', email);
     const token = generateToken(user);
     res.json({ token, user: { id: user.id, email: user.email } });
   } catch (err) {
@@ -253,12 +260,6 @@ app.post('/api/auth/login', async (req, res) => {
                       errorMsg.includes('connect ECONNREFUSED') ||
                       err?.code === 'ECONNREFUSED' ||
                       err?.code === 'ENOTFOUND';
-    
-    console.error('[login] Error details:', { 
-      message: errorMsg, 
-      code: err?.code, 
-      isDbError
-    });
     
     if (isDbError) {
       const isRailway = !!process.env.DATABASE_URL || !!process.env.RAILWAY_ENVIRONMENT;
