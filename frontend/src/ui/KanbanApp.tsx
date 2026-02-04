@@ -52,6 +52,15 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
   const [newQuoteNotes, setNewQuoteNotes] = useState('');
   const [editingQuote, setEditingQuote] = useState<QuoteCard | null>(null);
   const [editNotes, setEditNotes] = useState('');
+  const [editTitle, setEditTitle] = useState('');
+  const [editClientName, setEditClientName] = useState('');
+  const [editValue, setEditValue] = useState('');
+  const [editStatus, setEditStatus] = useState<'Tender' | 'OTP'>('Tender');
+  const [editEmail, setEditEmail] = useState('');
+  const [editNextChase, setEditNextChase] = useState('');
+  const [editLastChased, setEditLastChased] = useState('');
+  const [editFile, setEditFile] = useState<File | null>(null);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
@@ -227,22 +236,73 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
   const handleEditQuote = (quote: QuoteCard) => {
     setEditingQuote(quote);
     setEditNotes(quote.notes || '');
+    setEditTitle(quote.title || '');
+    setEditClientName(quote.clientName || '');
+    setEditValue(quote.value?.toString() || '');
+    setEditStatus(quote.status || 'Tender');
+    setEditEmail(quote.reminderEmail || '');
+    setEditNextChase(quote.nextChaseAt ? new Date(quote.nextChaseAt).toISOString().split('T')[0] : '');
+    setEditLastChased(quote.lastChasedAt ? new Date(quote.lastChasedAt).toISOString().split('T')[0] : '');
+    setEditFile(null);
+    setPdfPreviewUrl(null);
   };
 
   const handleCloseEditModal = () => {
     setEditingQuote(null);
     setEditNotes('');
+    setEditTitle('');
+    setEditClientName('');
+    setEditValue('');
+    setEditStatus('Tender');
+    setEditEmail('');
+    setEditNextChase('');
+    setEditLastChased('');
+    setEditFile(null);
+    if (pdfPreviewUrl) {
+      URL.revokeObjectURL(pdfPreviewUrl);
+      setPdfPreviewUrl(null);
+    }
   };
 
-  const handleUpdateNotes = async (e: React.FormEvent) => {
+  const handleViewPdf = (url: string) => {
+    // If it's a relative URL, make it absolute
+    // For Railway/production, the URL should already be correct
+    const fullUrl = url.startsWith('http') ? url : `${window.location.origin}${url}`;
+    setPdfPreviewUrl(fullUrl);
+  };
+
+  const handleClosePdfPreview = () => {
+    if (pdfPreviewUrl) {
+      URL.revokeObjectURL(pdfPreviewUrl);
+      setPdfPreviewUrl(null);
+    }
+  };
+
+  const handleUpdateQuote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingQuote) return;
 
     setUpdating(true);
     try {
-      const updated = await updateQuote(editingQuote.id, {
+      const valueNumber = editValue ? Number(editValue) : undefined;
+      const payload: Partial<QuoteCard> = {
+        title: editTitle.trim(),
+        clientName: editClientName.trim(),
+        value: Number.isNaN(valueNumber) ? undefined : valueNumber,
+        status: editStatus,
+        reminderEmail: editEmail.trim() || undefined,
+        nextChaseAt: editNextChase ? new Date(editNextChase).toISOString() : undefined,
+        lastChasedAt: editLastChased ? new Date(editLastChased).toISOString() : undefined,
         notes: editNotes.trim() || undefined
-      });
+      };
+
+      let updated = await updateQuote(editingQuote.id, payload);
+
+      // Upload new file if provided
+      if (editFile) {
+        updated = await uploadQuoteAttachment(editingQuote.id, editFile);
+      }
+
       setQuotes((prev) =>
         prev.map((q) => (q.id === updated.id ? updated : q))
       );
@@ -250,7 +310,7 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
       setError(null);
     } catch (err) {
       console.error(err);
-      setError('Unable to update notes. Please try again.');
+      setError('Unable to update lead. Please try again.');
     } finally {
       setUpdating(false);
     }
@@ -485,16 +545,31 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
                                   </div>
                                 )}
                                 {quote.attachmentUrl && (
-                                  <a
-                                    href={quote.attachmentUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    onClick={(e) => e.stopPropagation()}
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    className="mt-2 inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
-                                  >
-                                    View quote
-                                  </a>
+                                  <div className="mt-2 flex items-center gap-2">
+                                    <a
+                                      href={quote.attachmentUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
+                                    >
+                                      View quote
+                                    </a>
+                                    {quote.attachmentUrl.toLowerCase().endsWith('.pdf') && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          e.preventDefault();
+                                          handleViewPdf(quote.attachmentUrl!);
+                                        }}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        className="text-xs text-blue-600 hover:text-blue-700"
+                                      >
+                                        | Preview PDF
+                                      </button>
+                                    )}
+                                  </div>
                                 )}
                               </article>
                             )}
@@ -713,32 +788,154 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
       )}
 
       {editingQuote && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-900/40 px-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-900/40 px-4 overflow-y-auto py-8">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl my-auto">
             <h2 className="mb-4 text-base font-semibold text-slate-900">
               Edit Lead: {editingQuote.title}
             </h2>
-            <form onSubmit={handleUpdateNotes} className="space-y-4 text-sm">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs font-medium text-slate-600 mb-2">Client</p>
-                <p className="text-sm text-slate-900">{editingQuote.clientName}</p>
+            <form onSubmit={handleUpdateQuote} className="space-y-4 text-sm">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-slate-600">
+                    Project title
+                  </span>
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none ring-blue-500/0 transition focus:bg-white focus:ring-2"
+                    required
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-slate-600">
+                    Customer names
+                  </span>
+                  <input
+                    type="text"
+                    value={editClientName}
+                    onChange={(e) => setEditClientName(e.target.value)}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none ring-blue-500/0 transition focus:bg-white focus:ring-2"
+                    required
+                  />
+                </label>
               </div>
-              {editingQuote.value != null && (
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs font-medium text-slate-600 mb-2">Value</p>
-                  <p className="text-sm text-slate-900">£{editingQuote.value.toLocaleString()}</p>
-                </div>
-              )}
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-slate-600">
+                    Value £
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none ring-blue-500/0 transition focus:bg-white focus:ring-2"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-slate-600">
+                    Customer email
+                  </span>
+                  <input
+                    type="email"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none ring-blue-500/0 transition focus:bg-white focus:ring-2"
+                    placeholder="you@company.com"
+                  />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-slate-600">
+                    Status
+                  </span>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value as 'Tender' | 'OTP')}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none ring-blue-500/0 transition focus:bg-white focus:ring-2"
+                  >
+                    <option value="Tender">Tender</option>
+                    <option value="OTP">OTP</option>
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-slate-600">
+                    Expected date
+                  </span>
+                  <input
+                    type="date"
+                    value={editNextChase}
+                    onChange={(e) => setEditNextChase(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none ring-blue-500/0 transition focus:bg-white focus:ring-2"
+                  />
+                </label>
+              </div>
+
               <label className="flex flex-col gap-1">
                 <span className="text-xs font-medium text-slate-600">
-                  Notes
+                  Last chased
+                </span>
+                <input
+                  type="date"
+                  value={editLastChased}
+                  onChange={(e) => setEditLastChased(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none ring-blue-500/0 transition focus:bg-white focus:ring-2"
+                />
+              </label>
+
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-slate-600">
+                  Notes (optional)
                 </span>
                 <textarea
                   value={editNotes}
                   onChange={(e) => setEditNotes(e.target.value)}
-                  rows={6}
+                  rows={3}
                   className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none ring-blue-500/0 transition focus:bg-white focus:ring-2 resize-none"
-                  placeholder="Add or edit notes about this lead..."
+                  placeholder="Add any additional notes about this lead..."
+                />
+              </label>
+
+              {editingQuote.attachmentUrl && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-medium text-slate-600 mb-2">Current attachment</p>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={editingQuote.attachmentUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-blue-600 hover:text-blue-700"
+                    >
+                      View attachment
+                    </a>
+                    {editingQuote.attachmentUrl.toLowerCase().endsWith('.pdf') && (
+                      <button
+                        type="button"
+                        onClick={() => handleViewPdf(editingQuote.attachmentUrl!)}
+                        className="text-xs text-blue-600 hover:text-blue-700"
+                      >
+                        | Preview PDF
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-slate-600">
+                  {editingQuote.attachmentUrl ? 'Replace attachment (optional)' : 'Add attachment (optional)'}
+                </span>
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,.xlsx,.xls,.png,.jpg,.jpeg"
+                  onChange={(e) =>
+                    setEditFile(e.target.files ? e.target.files[0] : null)
+                  }
+                  className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-800 hover:file:bg-slate-200"
                 />
               </label>
 
@@ -746,20 +943,43 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
                 <button
                   type="button"
                   onClick={handleCloseEditModal}
-                  disabled={updating}
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={updating}
-                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-60"
                 >
-                  {updating ? 'Saving…' : 'Save notes'}
+                  {updating ? 'Updating...' : 'Update Lead'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* PDF Preview Modal */}
+      {pdfPreviewUrl && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/80 px-4">
+          <div className="w-full max-w-5xl rounded-2xl bg-white shadow-xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+              <h3 className="text-sm font-semibold text-slate-900">PDF Preview</h3>
+              <button
+                onClick={handleClosePdfPreview}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-4">
+              <iframe
+                src={pdfPreviewUrl}
+                className="w-full h-full min-h-[600px] border border-slate-200 rounded-lg"
+                title="PDF Preview"
+              />
+            </div>
           </div>
         </div>
       )}
