@@ -76,11 +76,17 @@ async function initDb() {
       type text not null,
       subject text,
       description text,
+      attachment_url text,
       activity_date timestamptz not null default now(),
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     )
   `);
+
+  // Add attachment_url column if it doesn't exist
+  await pool.query(
+    'alter table activities add column if not exists attachment_url text'
+  );
 
   // Create tasks table for task management
   await pool.query(`
@@ -701,8 +707,8 @@ async function getActivitiesByCustomerId(customerId) {
 
 async function createActivity(activity) {
   const { rows } = await pool.query(
-    `insert into activities (customer_id, contact_id, quote_id, type, subject, description, activity_date)
-     values ($1, $2, $3, $4, $5, $6, $7) returning *`,
+    `insert into activities (customer_id, contact_id, quote_id, type, subject, description, attachment_url, activity_date)
+     values ($1, $2, $3, $4, $5, $6, $7, $8) returning *`,
     [
       activity.customerId,
       activity.contactId || null,
@@ -710,6 +716,7 @@ async function createActivity(activity) {
       activity.type,
       activity.subject || null,
       activity.description || null,
+      activity.attachmentUrl || null,
       activity.activityDate ? new Date(activity.activityDate) : new Date()
     ]
   );
@@ -725,6 +732,7 @@ function toActivityDomain(row) {
     type: row.type,
     subject: row.subject || null,
     description: row.description || null,
+    attachmentUrl: row.attachment_url || null,
     activityDate: row.activity_date.toISOString(),
     contactName: row.first_name && row.last_name ? `${row.first_name} ${row.last_name}` : null,
     quoteTitle: row.quote_title || null,
@@ -868,6 +876,7 @@ module.exports = {
   deleteContact,
   getActivitiesByCustomerId,
   createActivity,
+  pool,
   getTasksByCustomerId,
   getAllTasks,
   getTasksByUserId,

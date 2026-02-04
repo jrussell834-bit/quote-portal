@@ -28,6 +28,7 @@ const {
   deleteContact,
   getActivitiesByCustomerId,
   createActivity,
+  pool,
   getTasksByCustomerId,
   getAllTasks,
   getTasksByUserId,
@@ -591,24 +592,102 @@ app.get('/api/customers/:id/activities', authMiddleware, async (req, res) => {
 
 app.post('/api/customers/:id/activities', authMiddleware, async (req, res) => {
   const { id } = req.params;
-  const { contactId, quoteId, type, subject, description, activityDate } = req.body || {};
+  const { contactId, quoteId, type, subject, description, activityDate, attachmentUrl } = req.body || {};
   if (!type) {
     return res.status(400).json({ message: 'Activity type is required' });
   }
+  // Description is optional in database, but we'll ensure it's handled properly
   try {
     const activity = await createActivity({
       customerId: id,
-      contactId,
-      quoteId,
+      contactId: contactId || null,
+      quoteId: quoteId || null,
       type,
-      subject,
-      description,
-      activityDate
+      subject: subject ? subject.trim() : null,
+      description: description ? description.trim() : null,
+      attachmentUrl: attachmentUrl || null,
+      activityDate: activityDate || new Date().toISOString()
     });
     res.status(201).json(activity);
   } catch (err) {
+    console.error('[create activity] Error:', err);
+    console.error('[create activity] Error details:', {
+      message: err?.message,
+      code: err?.code,
+      detail: err?.detail,
+      constraint: err?.constraint,
+      stack: err?.stack
+    });
+    const errorMessage = err?.message || 'Error creating activity';
+    res.status(500).json({ 
+      message: 'Error creating activity',
+      error: errorMessage,
+      details: err?.detail || err?.code
+    });
+  }
+});
+
+// Upload activity attachment (email files)
+app.post('/api/customers/:id/activities/:activityId/attachment', authMiddleware, upload.single('file'), async (req, res) => {
+  const { id, activityId } = req.params;
+  if (!req.file) {
+    return res.status(400).json({ message: 'File is required' });
+  }
+  
+  // Validate file type - allow email files (.eml, .msg) and PDFs
+  const allowedMimes = ['message/rfc822', 'application/vnd.ms-outlook', 'application/pdf', 'text/plain'];
+  const allowedExtensions = ['.eml', '.msg', '.pdf', '.txt'];
+  const fileExt = path.extname(req.file.originalname).toLowerCase();
+  
+  if (!allowedMimes.includes(req.file.mimetype) && !allowedExtensions.includes(fileExt)) {
+    // Delete the uploaded file if it's not allowed
+    const fs = require('fs');
+    try {
+      fs.unlinkSync(req.file.path);
+    } catch (err) {
+      console.error('[upload] Error deleting invalid file:', err);
+    }
+    return res.status(400).json({ message: 'Only email files (.eml, .msg), PDF, or text files are allowed' });
+  }
+  
+  try {
+    const attachmentUrl = `/uploads/${req.file.filename}`;
+    // Update the activity with the attachment URL
+    const { rows } = await pool.query(
+      'update activities set attachment_url = $1, updated_at = now() where id = $2 and customer_id = $3 returning *',
+      [attachmentUrl, activityId, id]
+    );
+    
+    if (!rows[0]) {
+      // Delete uploaded file if activity not found
+      const fs = require('fs');
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (err) {
+        console.error('[upload] Error deleting file:', err);
+      }
+      return res.status(404).json({ message: 'Activity not found' });
+    }
+    
+    // Fetch updated activity using the db function
+    const activities = await getActivitiesByCustomerId(id);
+    const updatedActivity = activities.find(a => a.id === activityId);
+    
+    if (!updatedActivity) {
+      return res.status(404).json({ message: 'Activity not found after update' });
+    }
+    
+    res.json(updatedActivity);
+  } catch (err) {
     console.error(err);
-    res.status(500).json({ message: 'Error creating activity' });
+    // Delete uploaded file on error
+    const fs = require('fs');
+    try {
+      if (req.file) fs.unlinkSync(req.file.path);
+    } catch (unlinkErr) {
+      console.error('[upload] Error deleting file on error:', unlinkErr);
+    }
+    res.status(500).json({ message: 'Error saving attachment' });
   }
 });
 
