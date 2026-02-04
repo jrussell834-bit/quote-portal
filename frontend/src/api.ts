@@ -58,6 +58,11 @@ export async function updateQuoteStage(id: string, stage: QuoteCard['stage']) {
   return res.data;
 }
 
+export async function updateQuote(id: string, payload: Partial<QuoteCard>) {
+  const res = await api.put<QuoteCard>(`/quotes/${id}`, payload);
+  return res.data;
+}
+
 export async function createQuote(payload: Partial<QuoteCard>) {
   const res = await api.post<QuoteCard>('/quotes', payload);
   return res.data;

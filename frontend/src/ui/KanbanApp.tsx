@@ -5,7 +5,7 @@ import {
   Draggable,
   type DropResult
 } from '@hello-pangea/dnd';
-import { createQuote, fetchQuotes, updateQuoteStage, uploadQuoteAttachment } from '../api';
+import { createQuote, fetchQuotes, updateQuoteStage, uploadQuoteAttachment, updateQuote } from '../api';
 
 type StageKey = 'new' | 'sent' | 'follow_up' | 'negotiation' | 'won' | 'lost';
 
@@ -20,6 +20,7 @@ export type QuoteCard = {
   reminderEmail?: string;
   attachmentUrl?: string;
   status?: 'Tender' | 'OTP';
+  notes?: string;
 };
 
 const STAGES: { id: StageKey; title: string }[] = [
@@ -45,6 +46,10 @@ export const KanbanApp: React.FC = () => {
   const [newQuoteNextChase, setNewQuoteNextChase] = useState('');
   const [newQuoteFile, setNewQuoteFile] = useState<File | null>(null);
   const [newQuoteStatus, setNewQuoteStatus] = useState<'Tender' | 'OTP'>('Tender');
+  const [newQuoteNotes, setNewQuoteNotes] = useState('');
+  const [editingQuote, setEditingQuote] = useState<QuoteCard | null>(null);
+  const [editNotes, setEditNotes] = useState('');
+  const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -110,11 +115,44 @@ export const KanbanApp: React.FC = () => {
     setNewQuoteNextChase('');
     setNewQuoteFile(null);
     setNewQuoteStatus('Tender');
+    setNewQuoteNotes('');
   };
 
   const handleOpenNewModal = () => {
     resetNewQuoteForm();
     setIsNewModalOpen(true);
+  };
+
+  const handleEditQuote = (quote: QuoteCard) => {
+    setEditingQuote(quote);
+    setEditNotes(quote.notes || '');
+  };
+
+  const handleCloseEditModal = () => {
+    setEditingQuote(null);
+    setEditNotes('');
+  };
+
+  const handleUpdateNotes = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingQuote) return;
+
+    setUpdating(true);
+    try {
+      const updated = await updateQuote(editingQuote.id, {
+        notes: editNotes.trim() || undefined
+      });
+      setQuotes((prev) =>
+        prev.map((q) => (q.id === updated.id ? updated : q))
+      );
+      handleCloseEditModal();
+      setError(null);
+    } catch (err) {
+      console.error(err);
+      setError('Unable to update notes. Please try again.');
+    } finally {
+      setUpdating(false);
+    }
   };
 
   const handleCreateQuote = async (e: React.FormEvent) => {
@@ -134,7 +172,8 @@ export const KanbanApp: React.FC = () => {
         stage: 'new',
         reminderEmail: newQuoteEmail || undefined,
         nextChaseAt: newQuoteNextChase ? new Date(newQuoteNextChase).toISOString() : undefined,
-        status: newQuoteStatus
+        status: newQuoteStatus,
+        notes: newQuoteNotes.trim() || undefined
       };
 
       const created = await createQuote({
@@ -244,15 +283,30 @@ export const KanbanApp: React.FC = () => {
                                 ref={dragProvided.innerRef}
                                 {...dragProvided.draggableProps}
                                 {...dragProvided.dragHandleProps}
-                                className={`group rounded-xl bg-white p-3 text-left shadow-sm ring-1 ring-slate-200 transition hover:shadow-md cursor-grab active:cursor-grabbing ${
+                                className={`group relative rounded-xl bg-white p-3 text-left shadow-sm ring-1 ring-slate-200 transition hover:shadow-md cursor-grab active:cursor-grabbing ${
                                   dragSnapshot.isDragging
                                     ? 'ring-blue-500 shadow-lg opacity-90'
                                     : ''
                                 }`}
                               >
-                                <h3 className="mb-1 line-clamp-2 text-sm font-semibold text-slate-900">
-                                  {quote.title}
-                                </h3>
+                                <div className="flex items-start justify-between gap-2 mb-1">
+                                  <h3 className="line-clamp-2 text-sm font-semibold text-slate-900 flex-1">
+                                    {quote.title}
+                                  </h3>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleEditQuote(quote);
+                                    }}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    className="flex-shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+                                    title="Edit notes"
+                                  >
+                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                  </button>
+                                </div>
                                 <p className="mb-1 text-xs font-medium text-slate-600">
                                   {quote.clientName}
                                 </p>
@@ -290,6 +344,13 @@ export const KanbanApp: React.FC = () => {
                                     </span>
                                   </div>
                                 </div>
+                                {quote.notes && (
+                                  <div className="mt-2 rounded-md bg-slate-50 p-2">
+                                    <p className="line-clamp-2 text-[11px] text-slate-600">
+                                      {quote.notes}
+                                    </p>
+                                  </div>
+                                )}
                                 {quote.attachmentUrl && (
                                   <a
                                     href={quote.attachmentUrl}
@@ -414,6 +475,19 @@ export const KanbanApp: React.FC = () => {
 
               <label className="flex flex-col gap-1">
                 <span className="text-xs font-medium text-slate-600">
+                  Notes (optional)
+                </span>
+                <textarea
+                  value={newQuoteNotes}
+                  onChange={(e) => setNewQuoteNotes(e.target.value)}
+                  rows={3}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none ring-blue-500/0 transition focus:bg-white focus:ring-2 resize-none"
+                  placeholder="Add any additional notes about this lead..."
+                />
+              </label>
+
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-slate-600">
                   Quote attachment (optional)
                 </span>
                 <input
@@ -443,6 +517,58 @@ export const KanbanApp: React.FC = () => {
                   className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
                 >
                   {creating ? 'Creating…' : 'Create quote'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editingQuote && (
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+            <h2 className="mb-4 text-base font-semibold text-slate-900">
+              Edit Lead: {editingQuote.title}
+            </h2>
+            <form onSubmit={handleUpdateNotes} className="space-y-4 text-sm">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-medium text-slate-600 mb-2">Client</p>
+                <p className="text-sm text-slate-900">{editingQuote.clientName}</p>
+              </div>
+              {editingQuote.value != null && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-medium text-slate-600 mb-2">Value</p>
+                  <p className="text-sm text-slate-900">£{editingQuote.value.toLocaleString()}</p>
+                </div>
+              )}
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-slate-600">
+                  Notes
+                </span>
+                <textarea
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  rows={6}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none ring-blue-500/0 transition focus:bg-white focus:ring-2 resize-none"
+                  placeholder="Add or edit notes about this lead..."
+                />
+              </label>
+
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={handleCloseEditModal}
+                  disabled={updating}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updating}
+                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {updating ? 'Saving…' : 'Save notes'}
                 </button>
               </div>
             </form>
