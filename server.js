@@ -17,7 +17,19 @@ const {
   getAllCustomers,
   getCustomerById,
   findOrCreateCustomer,
-  getQuotesByCustomerId
+  updateCustomer,
+  getQuotesByCustomerId,
+  getContactsByCustomerId,
+  createContact,
+  updateContact,
+  deleteContact,
+  getActivitiesByCustomerId,
+  createActivity,
+  getTasksByCustomerId,
+  getAllTasks,
+  getTasksByUserId,
+  createTask,
+  updateTask
 } = require('./db');
 const { startReminderScheduler } = require('./reminderService');
 
@@ -154,20 +166,22 @@ app.post('/api/auth/login', async (req, res) => {
 function createQuote(payload) {
   const now = new Date().toISOString();
   return {
-    id: `q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    id: payload.id || `q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     title: payload.title ?? 'Untitled quote',
     clientName: payload.clientName ?? 'Unknown client',
     customerId: payload.customerId ?? null,
+    createdBy: payload.createdBy ?? null,
     value: payload.value ?? null,
     stage: payload.stage ?? 'new',
+    soNumber: payload.soNumber ?? null,
     lastChasedAt: payload.lastChasedAt ?? null,
     nextChaseAt: payload.nextChaseAt ?? null,
     reminderEmail: payload.reminderEmail ?? null,
     attachmentUrl: payload.attachmentUrl ?? null,
     status: payload.status ?? null,
     notes: payload.notes ?? null,
-    createdAt: now,
-    updatedAt: now
+    createdAt: payload.createdAt || now,
+    updatedAt: payload.updatedAt || now
   };
 }
 
@@ -188,13 +202,16 @@ app.post('/api/quotes', authMiddleware, async (req, res) => {
     const body = req.body || {};
     let customerId = body.customerId;
     
+    // Get user ID from JWT token (req.user.sub is the user ID)
+    const userId = req.user?.sub || null;
+    
     // If customer name is provided but no customerId, find or create customer
     if (body.customerName && !customerId) {
       const customer = await findOrCreateCustomer(body.customerName);
       customerId = customer.id;
     }
     
-    const quote = createQuote({ ...body, customerId });
+    const quote = createQuote({ ...body, customerId, createdBy: userId });
     await insertQuote(quote);
     
     // Fetch the full quote with customer info
@@ -318,16 +335,209 @@ app.get('/api/customers/:id', authMiddleware, async (req, res) => {
 
 // Create or find customer
 app.post('/api/customers', authMiddleware, async (req, res) => {
-  const { name } = req.body || {};
+  const { name, email, phone, website, address, industry, notes } = req.body || {};
   if (!name || !name.trim()) {
     return res.status(400).json({ message: 'Customer name is required' });
   }
   try {
     const customer = await findOrCreateCustomer(name.trim());
+    // Update customer with additional CRM fields if provided
+    if (email || phone || website || address || industry || notes) {
+      const updated = await updateCustomer(customer.id, {
+        email, phone, website, address, industry, notes
+      });
+      return res.status(201).json(updated);
+    }
     res.status(201).json(customer);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Error creating customer' });
+  }
+});
+
+// Update customer
+app.put('/api/customers/:id', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const updated = await updateCustomer(id, req.body);
+    if (!updated) {
+      return res.status(404).json({ message: 'Customer not found' });
+    }
+    res.json(updated);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error updating customer' });
+  }
+});
+
+// Contacts endpoints
+app.get('/api/customers/:id/contacts', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const contacts = await getContactsByCustomerId(id);
+    res.json(contacts);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error loading contacts' });
+  }
+});
+
+app.post('/api/customers/:id/contacts', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const { firstName, lastName, email, phone, jobTitle, notes } = req.body || {};
+  if (!firstName || !lastName) {
+    return res.status(400).json({ message: 'First name and last name are required' });
+  }
+  try {
+    const contact = await createContact({
+      customerId: id,
+      firstName,
+      lastName,
+      email,
+      phone,
+      jobTitle,
+      notes
+    });
+    res.status(201).json(contact);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error creating contact' });
+  }
+});
+
+app.put('/api/contacts/:id', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const updated = await updateContact(id, req.body);
+    if (!updated) {
+      return res.status(404).json({ message: 'Contact not found' });
+    }
+    res.json(updated);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error updating contact' });
+  }
+});
+
+app.delete('/api/contacts/:id', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  try {
+    await deleteContact(id);
+    res.json({ message: 'Contact deleted' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error deleting contact' });
+  }
+});
+
+// Activities endpoints
+app.get('/api/customers/:id/activities', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const activities = await getActivitiesByCustomerId(id);
+    res.json(activities);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error loading activities' });
+  }
+});
+
+app.post('/api/customers/:id/activities', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const { contactId, quoteId, type, subject, description, activityDate } = req.body || {};
+  if (!type) {
+    return res.status(400).json({ message: 'Activity type is required' });
+  }
+  try {
+    const activity = await createActivity({
+      customerId: id,
+      contactId,
+      quoteId,
+      type,
+      subject,
+      description,
+      activityDate
+    });
+    res.status(201).json(activity);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error creating activity' });
+  }
+});
+
+// Tasks endpoints
+app.get('/api/tasks', authMiddleware, async (req, res) => {
+  try {
+    const tasks = await getAllTasks();
+    res.json(tasks);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error loading tasks' });
+  }
+});
+
+// Get tasks for current user
+app.get('/api/tasks/my', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user?.sub || null;
+    if (!userId) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+    const tasks = await getTasksByUserId(userId);
+    res.json(tasks);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error loading tasks' });
+  }
+});
+
+app.get('/api/customers/:id/tasks', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const tasks = await getTasksByCustomerId(id);
+    res.json(tasks);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error loading tasks' });
+  }
+});
+
+app.post('/api/tasks', authMiddleware, async (req, res) => {
+  const { customerId, contactId, quoteId, assignedTo, title, description, dueDate, priority } = req.body || {};
+  if (!title) {
+    return res.status(400).json({ message: 'Title is required' });
+  }
+  try {
+    // If assignedTo is not provided, default to current user
+    const userId = req.user?.sub || null;
+    const task = await createTask({
+      customerId: customerId || null,
+      contactId: contactId || null,
+      quoteId: quoteId || null,
+      assignedTo: assignedTo || userId,
+      title,
+      description,
+      dueDate,
+      priority
+    });
+    res.status(201).json(task);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error creating task' });
+  }
+});
+
+app.put('/api/tasks/:id', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const updated = await updateTask(id, req.body);
+    if (!updated) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+    res.json(updated);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error updating task' });
   }
 });
 

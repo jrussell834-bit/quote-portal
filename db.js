@@ -31,10 +31,98 @@ async function initDb() {
     create table if not exists customers (
       id uuid primary key default gen_random_uuid(),
       name text unique not null,
+      email text,
+      phone text,
+      website text,
+      address text,
+      industry text,
+      notes text,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     )
   `);
+
+  // Add CRM columns to customers if they don't exist
+  await pool.query('alter table customers add column if not exists email text');
+  await pool.query('alter table customers add column if not exists phone text');
+  await pool.query('alter table customers add column if not exists website text');
+  await pool.query('alter table customers add column if not exists address text');
+  await pool.query('alter table customers add column if not exists industry text');
+  await pool.query('alter table customers add column if not exists notes text');
+
+  // Create contacts table for individual contacts within customers
+  await pool.query(`
+    create table if not exists contacts (
+      id uuid primary key default gen_random_uuid(),
+      customer_id uuid references customers(id) on delete cascade,
+      first_name text not null,
+      last_name text not null,
+      email text,
+      phone text,
+      job_title text,
+      notes text,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    )
+  `);
+
+  // Create activities table for tracking interactions
+  await pool.query(`
+    create table if not exists activities (
+      id uuid primary key default gen_random_uuid(),
+      customer_id uuid references customers(id) on delete cascade,
+      contact_id uuid references contacts(id) on delete set null,
+      quote_id text references quotes(id) on delete set null,
+      type text not null,
+      subject text,
+      description text,
+      activity_date timestamptz not null default now(),
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    )
+  `);
+
+  // Create tasks table for task management
+  await pool.query(`
+    create table if not exists tasks (
+      id uuid primary key default gen_random_uuid(),
+      customer_id uuid references customers(id) on delete cascade,
+      contact_id uuid references contacts(id) on delete set null,
+      quote_id text references quotes(id) on delete set null,
+      assigned_to uuid references users(id) on delete set null,
+      title text not null,
+      description text,
+      due_date timestamptz,
+      completed boolean default false,
+      priority text default 'medium',
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    )
+  `);
+
+  // Add assigned_to column if it doesn't exist
+  await pool.query(
+    'alter table tasks add column if not exists assigned_to uuid'
+  );
+
+  // Add foreign key constraint for assigned_to if it doesn't exist
+  try {
+    await pool.query(`
+      do $$
+      begin
+        if not exists (
+          select 1 from pg_constraint
+          where conname = 'tasks_assigned_to_fkey'
+        ) then
+          alter table tasks
+          add constraint tasks_assigned_to_fkey
+          foreign key (assigned_to) references users(id) on delete set null;
+        end if;
+      end $$;
+    `);
+  } catch (err) {
+    console.log('[db] Note: Could not add assigned_to foreign key constraint (may already exist):', err.message);
+  }
 
   await pool.query(`
     create table if not exists quotes (
@@ -42,6 +130,7 @@ async function initDb() {
       title text not null,
       client_name text not null,
       customer_id uuid references customers(id) on delete set null,
+      created_by uuid references users(id) on delete set null,
       value numeric,
       stage text not null,
       position integer default 0,
@@ -76,6 +165,30 @@ async function initDb() {
   await pool.query(
     'alter table quotes add column if not exists so_number text'
   );
+
+  // In case the table already existed without the created_by column, try to add it.
+  await pool.query(
+    'alter table quotes add column if not exists created_by uuid'
+  );
+
+  // Add foreign key constraint for created_by if it doesn't exist
+  try {
+    await pool.query(`
+      do $$
+      begin
+        if not exists (
+          select 1 from pg_constraint
+          where conname = 'quotes_created_by_fkey'
+        ) then
+          alter table quotes
+          add constraint quotes_created_by_fkey
+          foreign key (created_by) references users(id) on delete set null;
+        end if;
+      end $$;
+    `);
+  } catch (err) {
+    console.log('[db] Note: Could not add created_by foreign key constraint (may already exist):', err.message);
+  }
 
   // In case the table already existed without the customer_id column, try to add it.
   // First add the column without constraint
@@ -243,17 +356,63 @@ async function findOrCreateCustomer(name) {
 }
 
 async function getQuotesByCustomerId(customerId) {
-  const { rows } = await pool.query(
-    'select * from quotes where customer_id = $1 order by created_at desc',
-    [customerId]
-  );
+  const { rows } = await pool.query(`
+    select q.*, u.email as created_by_name
+    from quotes q
+    left join users u on q.created_by = u.id
+    where q.customer_id = $1
+    order by q.created_at desc
+  `, [customerId]);
   return rows.map(toQuoteDomain);
+}
+
+async function updateCustomer(id, patch) {
+  const existing = await pool.query('select * from customers where id = $1', [id]);
+  if (!existing.rows[0]) return null;
+
+  const updated = {
+    ...existing.rows[0],
+    ...patch,
+    updated_at: new Date()
+  };
+
+  await pool.query(
+    `update customers
+     set name = coalesce($2, name), 
+         email = $3, 
+         phone = $4, 
+         website = $5, 
+         address = $6, 
+         industry = $7, 
+         notes = $8, 
+         updated_at = $9
+     where id = $1`,
+    [
+      id,
+      updated.name,
+      updated.email || null,
+      updated.phone || null,
+      updated.website || null,
+      updated.address || null,
+      updated.industry || null,
+      updated.notes || null,
+      updated.updated_at
+    ]
+  );
+  const { rows } = await pool.query('select * from customers where id = $1', [id]);
+  return toCustomerDomain(rows[0]);
 }
 
 function toCustomerDomain(row) {
   return {
     id: row.id,
     name: row.name,
+    email: row.email || null,
+    phone: row.phone || null,
+    website: row.website || null,
+    address: row.address || null,
+    industry: row.industry || null,
+    notes: row.notes || null,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString()
   };
@@ -261,9 +420,10 @@ function toCustomerDomain(row) {
 
 async function getAllQuotes() {
   const { rows } = await pool.query(`
-    select q.*, c.name as customer_name, c.id as customer_id
+    select q.*, c.name as customer_name, c.id as customer_id, u.email as created_by_name
     from quotes q
     left join customers c on q.customer_id = c.id
+    left join users u on q.created_by = u.id
     order by q.stage, q.position asc, q.created_at desc
   `);
   return rows.map(toQuoteDomain);
@@ -281,17 +441,18 @@ async function insertQuote(quote) {
     await pool.query(
       `
         insert into quotes (
-          id, title, client_name, customer_id, value, stage, position, so_number,
+          id, title, client_name, customer_id, created_by, value, stage, position, so_number,
           last_chased_at, next_chase_at, reminder_email,
           attachment_url, status, notes, created_at, updated_at
         )
-        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
       `,
       [
         quote.id,
         quote.title,
         quote.clientName,
         quote.customerId ?? null,
+        quote.createdBy ?? null,
         quote.value,
         quote.stage,
         newPosition,
@@ -389,9 +550,10 @@ async function updateQuotePositions(updates) {
 
 async function getQuoteById(id) {
   const { rows } = await pool.query(`
-    select q.*, c.name as customer_name, c.id as customer_id
+    select q.*, c.name as customer_name, c.id as customer_id, u.email as created_by_name
     from quotes q
     left join customers c on q.customer_id = c.id
+    left join users u on q.created_by = u.id
     where q.id = $1
   `, [id]);
   if (!rows[0]) return null;
@@ -433,6 +595,8 @@ function toQuoteDomain(row) {
     clientName: row.client_name,
     customerId: row.customer_id || null,
     customerName: row.customer_name || null,
+    createdBy: row.created_by || null,
+    createdByName: row.created_by_name || null,
     value: row.value != null ? Number(row.value) : null,
     stage: row.stage,
     position: row.position != null ? Number(row.position) : 0,
@@ -443,6 +607,238 @@ function toQuoteDomain(row) {
     attachmentUrl: row.attachment_url,
     status: row.status || null,
     notes: row.notes || null,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString()
+  };
+}
+
+// Contact functions
+async function getContactsByCustomerId(customerId) {
+  const { rows } = await pool.query(
+    'select * from contacts where customer_id = $1 order by last_name, first_name',
+    [customerId]
+  );
+  return rows.map(toContactDomain);
+}
+
+async function createContact(contact) {
+  const { rows } = await pool.query(
+    `insert into contacts (customer_id, first_name, last_name, email, phone, job_title, notes)
+     values ($1, $2, $3, $4, $5, $6, $7) returning *`,
+    [
+      contact.customerId,
+      contact.firstName,
+      contact.lastName,
+      contact.email || null,
+      contact.phone || null,
+      contact.jobTitle || null,
+      contact.notes || null
+    ]
+  );
+  return toContactDomain(rows[0]);
+}
+
+async function updateContact(id, patch) {
+  const existing = await pool.query('select * from contacts where id = $1', [id]);
+  if (!existing.rows[0]) return null;
+
+  const updated = {
+    ...existing.rows[0],
+    ...patch,
+    updated_at: new Date()
+  };
+
+  await pool.query(
+    `update contacts
+     set first_name = $2, last_name = $3, email = $4, phone = $5, job_title = $6, notes = $7, updated_at = $8
+     where id = $1`,
+    [
+      id,
+      updated.first_name,
+      updated.last_name,
+      updated.email || null,
+      updated.phone || null,
+      updated.job_title || null,
+      updated.notes || null,
+      updated.updated_at
+    ]
+  );
+  return toContactDomain(updated);
+}
+
+async function deleteContact(id) {
+  await pool.query('delete from contacts where id = $1', [id]);
+}
+
+function toContactDomain(row) {
+  return {
+    id: row.id,
+    customerId: row.customer_id,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    email: row.email || null,
+    phone: row.phone || null,
+    jobTitle: row.job_title || null,
+    notes: row.notes || null,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString()
+  };
+}
+
+// Activity functions
+async function getActivitiesByCustomerId(customerId) {
+  const { rows } = await pool.query(
+    `select a.*, c.first_name, c.last_name, q.title as quote_title
+     from activities a
+     left join contacts c on a.contact_id = c.id
+     left join quotes q on a.quote_id = q.id
+     where a.customer_id = $1
+     order by a.activity_date desc`,
+    [customerId]
+  );
+  return rows.map(toActivityDomain);
+}
+
+async function createActivity(activity) {
+  const { rows } = await pool.query(
+    `insert into activities (customer_id, contact_id, quote_id, type, subject, description, activity_date)
+     values ($1, $2, $3, $4, $5, $6, $7) returning *`,
+    [
+      activity.customerId,
+      activity.contactId || null,
+      activity.quoteId || null,
+      activity.type,
+      activity.subject || null,
+      activity.description || null,
+      activity.activityDate ? new Date(activity.activityDate) : new Date()
+    ]
+  );
+  return toActivityDomain(rows[0]);
+}
+
+function toActivityDomain(row) {
+  return {
+    id: row.id,
+    customerId: row.customer_id,
+    contactId: row.contact_id || null,
+    quoteId: row.quote_id || null,
+    type: row.type,
+    subject: row.subject || null,
+    description: row.description || null,
+    activityDate: row.activity_date.toISOString(),
+    contactName: row.first_name && row.last_name ? `${row.first_name} ${row.last_name}` : null,
+    quoteTitle: row.quote_title || null,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString()
+  };
+}
+
+// Task functions
+async function getTasksByCustomerId(customerId) {
+  const { rows } = await pool.query(
+    `select t.*, c.first_name, c.last_name, q.title as quote_title, u.email as assigned_to_name
+     from tasks t
+     left join contacts c on t.contact_id = c.id
+     left join quotes q on t.quote_id = q.id
+     left join users u on t.assigned_to = u.id
+     where t.customer_id = $1
+     order by t.due_date nulls last, t.created_at desc`,
+    [customerId]
+  );
+  return rows.map(toTaskDomain);
+}
+
+async function getAllTasks() {
+  const { rows } = await pool.query(
+    `select t.*, c.first_name, c.last_name, q.title as quote_title, cust.name as customer_name, u.email as assigned_to_name
+     from tasks t
+     left join contacts c on t.contact_id = c.id
+     left join quotes q on t.quote_id = q.id
+     left join customers cust on t.customer_id = cust.id
+     left join users u on t.assigned_to = u.id
+     where t.completed = false
+     order by t.due_date nulls last, t.created_at desc`
+  );
+  return rows.map(toTaskDomain);
+}
+
+async function getTasksByUserId(userId) {
+  const { rows } = await pool.query(
+    `select t.*, c.first_name, c.last_name, q.title as quote_title, q.id as quote_id, cust.name as customer_name, u.email as assigned_to_name
+     from tasks t
+     left join contacts c on t.contact_id = c.id
+     left join quotes q on t.quote_id = q.id
+     left join customers cust on t.customer_id = cust.id
+     left join users u on t.assigned_to = u.id
+     where t.assigned_to = $1 and t.completed = false
+     order by t.due_date nulls last, t.created_at desc`,
+    [userId]
+  );
+  return rows.map(toTaskDomain);
+}
+
+async function createTask(task) {
+  const { rows } = await pool.query(
+    `insert into tasks (customer_id, contact_id, quote_id, assigned_to, title, description, due_date, priority)
+     values ($1, $2, $3, $4, $5, $6, $7, $8) returning *`,
+    [
+      task.customerId || null,
+      task.contactId || null,
+      task.quoteId || null,
+      task.assignedTo || null,
+      task.title,
+      task.description || null,
+      task.dueDate ? new Date(task.dueDate) : null,
+      task.priority || 'medium'
+    ]
+  );
+  return toTaskDomain(rows[0]);
+}
+
+async function updateTask(id, patch) {
+  const existing = await pool.query('select * from tasks where id = $1', [id]);
+  if (!existing.rows[0]) return null;
+
+  const updated = {
+    ...existing.rows[0],
+    ...patch,
+    updated_at: new Date()
+  };
+
+  await pool.query(
+    `update tasks
+     set title = $2, description = $3, due_date = $4, completed = $5, priority = $6, updated_at = $7
+     where id = $1`,
+    [
+      id,
+      updated.title,
+      updated.description || null,
+      updated.due_date ? new Date(updated.due_date) : null,
+      updated.completed !== undefined ? updated.completed : existing.rows[0].completed,
+      updated.priority || 'medium',
+      updated.updated_at
+    ]
+  );
+  const { rows } = await pool.query('select * from tasks where id = $1', [id]);
+  return toTaskDomain(rows[0]);
+}
+
+function toTaskDomain(row) {
+  return {
+    id: row.id,
+    customerId: row.customer_id,
+    contactId: row.contact_id || null,
+    quoteId: row.quote_id || null,
+    assignedTo: row.assigned_to || null,
+    assignedToName: row.assigned_to_name || null,
+    title: row.title,
+    description: row.description || null,
+    dueDate: row.due_date ? row.due_date.toISOString() : null,
+    completed: row.completed || false,
+    priority: row.priority || 'medium',
+    contactName: row.first_name && row.last_name ? `${row.first_name} ${row.last_name}` : null,
+    quoteTitle: row.quote_title || null,
+    customerName: row.customer_name || null,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString()
   };
@@ -464,5 +860,17 @@ module.exports = {
   getAllCustomers,
   getCustomerById,
   findOrCreateCustomer,
-  getQuotesByCustomerId
+  updateCustomer,
+  getQuotesByCustomerId,
+  getContactsByCustomerId,
+  createContact,
+  updateContact,
+  deleteContact,
+  getActivitiesByCustomerId,
+  createActivity,
+  getTasksByCustomerId,
+  getAllTasks,
+  getTasksByUserId,
+  createTask,
+  updateTask
 };
