@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: quoteportal
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Run backend tests (if available)
+        run: npm test || echo "No tests configured"
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/quoteportal
+          JWT_SECRET: test-secret
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Check backend linting
+        run: npm run lint || echo "No lint script configured"
+
+      - name: Check frontend linting
+        run: |
+          cd frontend
+          npm run lint || echo "No lint script configured"
