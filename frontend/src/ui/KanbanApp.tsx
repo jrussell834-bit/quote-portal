@@ -19,6 +19,7 @@ export type QuoteCard = {
   value?: number;
   stage: StageKey;
   position?: number;
+  soNumber?: string | null;
   lastChasedAt?: string;
   nextChaseAt?: string;
   reminderEmail?: string;
@@ -45,6 +46,7 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
   const [newQuoteTitle, setNewQuoteTitle] = useState('');
   const [newQuoteClient, setNewQuoteClient] = useState('');
   const [newQuoteValue, setNewQuoteValue] = useState<string>('');
+  const [newQuoteSoNumber, setNewQuoteSoNumber] = useState('');
   const [newQuoteEmail, setNewQuoteEmail] = useState('');
   const [newQuoteNextChase, setNewQuoteNextChase] = useState('');
   const [newQuoteFile, setNewQuoteFile] = useState<File | null>(null);
@@ -55,6 +57,7 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
   const [editTitle, setEditTitle] = useState('');
   const [editClientName, setEditClientName] = useState('');
   const [editValue, setEditValue] = useState('');
+  const [editSoNumber, setEditSoNumber] = useState('');
   const [editStatus, setEditStatus] = useState<'Tender' | 'OTP'>('Tender');
   const [editEmail, setEditEmail] = useState('');
   const [editNextChase, setEditNextChase] = useState('');
@@ -213,6 +216,7 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
     setNewQuoteTitle('');
     setNewQuoteClient('');
     setNewQuoteValue('');
+    setNewQuoteSoNumber('');
     setNewQuoteEmail('');
     setNewQuoteNextChase('');
     setNewQuoteFile(null);
@@ -239,6 +243,7 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
     setEditTitle(quote.title || '');
     setEditClientName(quote.clientName || '');
     setEditValue(quote.value?.toString() || '');
+    setEditSoNumber(quote.soNumber || '');
     setEditStatus(quote.status || 'Tender');
     setEditEmail(quote.reminderEmail || '');
     setEditNextChase(quote.nextChaseAt ? new Date(quote.nextChaseAt).toISOString().split('T')[0] : '');
@@ -253,6 +258,7 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
     setEditTitle('');
     setEditClientName('');
     setEditValue('');
+    setEditSoNumber('');
     setEditStatus('Tender');
     setEditEmail('');
     setEditNextChase('');
@@ -289,6 +295,7 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
         title: editTitle.trim(),
         clientName: editClientName.trim(),
         value: Number.isNaN(valueNumber) ? undefined : valueNumber,
+        soNumber: editSoNumber.trim() || undefined,
         status: editStatus,
         reminderEmail: editEmail.trim() || undefined,
         nextChaseAt: editNextChase ? new Date(editNextChase).toISOString() : undefined,
@@ -344,6 +351,7 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
         customerId: customerId,
         customerName: isCreatingNewCustomer ? newCustomerName.trim() : (customerId ? customers.find(c => c.id === customerId)?.name : undefined),
         value: Number.isNaN(valueNumber) ? undefined : valueNumber,
+        soNumber: newQuoteSoNumber.trim() || undefined,
         stage: 'new',
         reminderEmail: newQuoteEmail || undefined,
         nextChaseAt: newQuoteNextChase ? new Date(newQuoteNextChase).toISOString() : undefined,
@@ -509,6 +517,11 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
                                     <span className="font-semibold text-slate-800">
                                       £{quote.value.toLocaleString()}
                                     </span>
+                                  </p>
+                                )}
+                                {quote.soNumber && (
+                                  <p className="mb-1 text-xs text-slate-500">
+                                    SO: <span className="font-medium text-slate-700">{quote.soNumber}</span>
                                   </p>
                                 )}
                                 <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-500">
@@ -695,6 +708,21 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
                 </label>
                 <label className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-slate-600">
+                    SO Number
+                  </span>
+                  <input
+                    type="text"
+                    value={newQuoteSoNumber}
+                    onChange={(e) => setNewQuoteSoNumber(e.target.value)}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none ring-brand-500/0 transition focus:bg-white focus:ring-2"
+                    placeholder="SO-12345"
+                  />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-slate-600">
                     Customer email
                   </span>
                   <input
@@ -708,33 +736,6 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
                 </label>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs font-medium text-slate-600">
-                    Status
-                  </span>
-                  <select
-                    value={newQuoteStatus}
-                    onChange={(e) => setNewQuoteStatus(e.target.value as 'Tender' | 'OTP')}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none ring-brand-500/0 transition focus:bg-white focus:ring-2"
-                  >
-                    <option value="Tender">Tender</option>
-                    <option value="OTP">OTP</option>
-                  </select>
-                </label>
-
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs font-medium text-slate-600">
-                    Expected date
-                  </span>
-                  <input
-                    type="date"
-                    value={newQuoteNextChase}
-                    onChange={(e) => setNewQuoteNextChase(e.target.value)}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none ring-brand-500/0 transition focus:bg-white focus:ring-2"
-                  />
-                </label>
-              </div>
 
               <label className="flex flex-col gap-1">
                 <span className="text-xs font-medium text-slate-600">
@@ -834,6 +835,21 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onN
                     className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none ring-blue-500/0 transition focus:bg-white focus:ring-2"
                   />
                 </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-slate-600">
+                    SO Number
+                  </span>
+                  <input
+                    type="text"
+                    value={editSoNumber}
+                    onChange={(e) => setEditSoNumber(e.target.value)}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none ring-blue-500/0 transition focus:bg-white focus:ring-2"
+                    placeholder="SO-12345"
+                  />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-slate-600">
                     Customer email
