@@ -70,6 +70,8 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void; onNavigate
   const [editFile, setEditFile] = useState<File | null>(null);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
+  const [isDraggingNewFile, setIsDraggingNewFile] = useState(false);
+  const [isDraggingEditFile, setIsDraggingEditFile] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [newCustomerName, setNewCustomerName] = useState('');
@@ -282,6 +284,7 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void; onNavigate
     setSelectedCustomerId('');
     setNewCustomerName('');
     setIsCreatingNewCustomer(false);
+    setIsDraggingNewFile(false);
   };
 
   const handleOpenNewModal = () => {
@@ -307,6 +310,7 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void; onNavigate
     setEditLastChased(quote.lastChasedAt ? new Date(quote.lastChasedAt).toISOString().split('T')[0] : '');
     setEditFile(null);
     setPdfPreviewUrl(null);
+    setIsDraggingEditFile(false);
   };
 
   const handleCloseEditModal = () => {
@@ -892,14 +896,86 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void; onNavigate
                 <span className="text-xs font-medium text-slate-600">
                   Quote attachment (optional)
                 </span>
-                <input
-                  type="file"
-                  accept=".pdf,.doc,.docx,.xlsx,.xls,.png,.jpg,.jpeg"
-                  onChange={(e) =>
-                    setNewQuoteFile(e.target.files ? e.target.files[0] : null)
-                  }
-                  className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-800 hover:file:bg-slate-200"
-                />
+                <div
+                  onDragEnter={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDraggingNewFile(true);
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (e.currentTarget.contains(e.relatedTarget as Node)) {
+                      return;
+                    }
+                    setIsDraggingNewFile(false);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDraggingNewFile(false);
+                    const files = e.dataTransfer.files;
+                    if (files && files.length > 0) {
+                      const file = files[0];
+                      const validTypes = ['.pdf', '.doc', '.docx', '.xlsx', '.xls', '.png', '.jpg', '.jpeg'];
+                      const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+                      if (validTypes.includes(fileExtension)) {
+                        setNewQuoteFile(file);
+                        setError(null);
+                      } else {
+                        setError(`Invalid file type. Allowed: ${validTypes.join(', ')}`);
+                      }
+                    }
+                  }}
+                  className={`relative rounded-lg border-2 border-dashed transition-colors ${
+                    isDraggingNewFile
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-slate-300 bg-slate-50 hover:border-slate-400 hover:bg-slate-100'
+                  }`}
+                >
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx,.xlsx,.xls,.png,.jpg,.jpeg"
+                    onChange={(e) =>
+                      setNewQuoteFile(e.target.files ? e.target.files[0] : null)
+                    }
+                    className="absolute inset-0 w-full cursor-pointer opacity-0"
+                  />
+                  <div className="flex flex-col items-center justify-center px-4 py-6 text-center">
+                    <svg
+                      className={`h-8 w-8 mb-2 ${
+                        isDraggingNewFile ? 'text-blue-500' : 'text-slate-400'
+                      }`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                      />
+                    </svg>
+                    <p className="text-xs font-medium text-slate-600 mb-1">
+                      {isDraggingNewFile
+                        ? 'Drop file here'
+                        : 'Drag & drop file or click to browse'}
+                    </p>
+                    <p className="text-[10px] text-slate-500">
+                      PDF, DOC, DOCX, XLSX, XLS, PNG, JPG, JPEG
+                    </p>
+                    {newQuoteFile && (
+                      <p className="mt-2 text-xs font-medium text-blue-600">
+                        Selected: {newQuoteFile.name}
+                      </p>
+                    )}
+                  </div>
+                </div>
               </label>
 
               <div className="mt-4 flex justify-end gap-2">
@@ -1083,14 +1159,86 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void; onNavigate
                 <span className="text-xs font-medium text-slate-600">
                   {editingQuote.attachmentUrl ? 'Replace attachment (optional)' : 'Add attachment (optional)'}
                 </span>
-                <input
-                  type="file"
-                  accept=".pdf,.doc,.docx,.xlsx,.xls,.png,.jpg,.jpeg"
-                  onChange={(e) =>
-                    setEditFile(e.target.files ? e.target.files[0] : null)
-                  }
-                  className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-800 hover:file:bg-slate-200"
-                />
+                <div
+                  onDragEnter={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDraggingEditFile(true);
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (e.currentTarget.contains(e.relatedTarget as Node)) {
+                      return;
+                    }
+                    setIsDraggingEditFile(false);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDraggingEditFile(false);
+                    const files = e.dataTransfer.files;
+                    if (files && files.length > 0) {
+                      const file = files[0];
+                      const validTypes = ['.pdf', '.doc', '.docx', '.xlsx', '.xls', '.png', '.jpg', '.jpeg'];
+                      const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+                      if (validTypes.includes(fileExtension)) {
+                        setEditFile(file);
+                        setError(null);
+                      } else {
+                        setError(`Invalid file type. Allowed: ${validTypes.join(', ')}`);
+                      }
+                    }
+                  }}
+                  className={`relative rounded-lg border-2 border-dashed transition-colors ${
+                    isDraggingEditFile
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-slate-300 bg-slate-50 hover:border-slate-400 hover:bg-slate-100'
+                  }`}
+                >
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx,.xlsx,.xls,.png,.jpg,.jpeg"
+                    onChange={(e) =>
+                      setEditFile(e.target.files ? e.target.files[0] : null)
+                    }
+                    className="absolute inset-0 w-full cursor-pointer opacity-0"
+                  />
+                  <div className="flex flex-col items-center justify-center px-4 py-6 text-center">
+                    <svg
+                      className={`h-8 w-8 mb-2 ${
+                        isDraggingEditFile ? 'text-blue-500' : 'text-slate-400'
+                      }`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                      />
+                    </svg>
+                    <p className="text-xs font-medium text-slate-600 mb-1">
+                      {isDraggingEditFile
+                        ? 'Drop file here'
+                        : 'Drag & drop file or click to browse'}
+                    </p>
+                    <p className="text-[10px] text-slate-500">
+                      PDF, DOC, DOCX, XLSX, XLS, PNG, JPG, JPEG
+                    </p>
+                    {editFile && (
+                      <p className="mt-2 text-xs font-medium text-blue-600">
+                        Selected: {editFile.name}
+                      </p>
+                    )}
+                  </div>
+                </div>
               </label>
 
               <div className="mt-4 flex justify-end gap-2">
