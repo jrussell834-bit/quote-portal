@@ -36,9 +36,20 @@ export const AuthApp: React.FC = () => {
       } else if (err?.response?.status === 503) {
         const dbError = err?.response?.data?.error || '';
         if (dbError.includes('PostgreSQL') || dbError.includes('Database connection')) {
-          msg = 'Database not connected. PostgreSQL is required to run this application.';
-          msg += ' Please install Docker and run: docker compose up -d db';
-          msg += ' OR install PostgreSQL locally and ensure it is running.';
+          // Detect if we're on Railway (production)
+          const isRailway = window.location.hostname.includes('railway.app') || 
+                           window.location.hostname.includes('up.railway.app') ||
+                           !window.location.hostname.includes('localhost');
+          
+          if (isRailway) {
+            msg = 'Database not connected on Railway.';
+            msg += ' Go to Railway dashboard → Your project → Click "+ New" → Add PostgreSQL database.';
+            msg += ' Railway will automatically set DATABASE_URL. Then redeploy your service.';
+          } else {
+            msg = 'Database not connected. PostgreSQL is required to run this application.';
+            msg += ' Please install Docker and run: docker compose up -d db';
+            msg += ' OR install PostgreSQL locally and ensure it is running.';
+          }
         } else {
           msg = err?.response?.data?.message || 'Service unavailable. Please check backend logs.';
         }

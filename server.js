@@ -163,10 +163,16 @@ app.post('/api/auth/login', async (req, res) => {
     });
     
     if (isDbError) {
+      const isRailway = !!process.env.DATABASE_URL || !!process.env.RAILWAY_ENVIRONMENT;
+      const hint = isRailway 
+        ? 'On Railway: Add PostgreSQL service from dashboard → "+ New" → "Database" → "Add PostgreSQL"'
+        : 'Please ensure PostgreSQL is running. See server console for details.';
+      
       res.status(503).json({ 
         message: 'Database connection failed', 
         error: 'Cannot connect to PostgreSQL database',
-        hint: 'Please ensure PostgreSQL is running. See server console for details.'
+        hint: hint,
+        isRailway: isRailway
       });
     } else {
       res.status(500).json({ 
