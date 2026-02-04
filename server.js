@@ -9,6 +9,7 @@ const {
   getAllQuotes,
   insertQuote,
   updateQuote,
+  updateQuotePositions,
   getQuoteById,
   createUser,
   findUserByEmail,
@@ -248,6 +249,23 @@ app.patch('/api/quotes/:id/stage', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Error updating stage' });
+  }
+});
+
+// Update multiple quote positions (for reordering within/between columns)
+app.patch('/api/quotes/positions', authMiddleware, async (req, res) => {
+  const { updates } = req.body;
+  if (!Array.isArray(updates) || updates.length === 0) {
+    return res.status(400).json({ message: 'Updates array is required' });
+  }
+  try {
+    await updateQuotePositions(updates);
+    // Fetch updated quotes
+    const allQuotes = await getAllQuotes();
+    res.json(allQuotes);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error updating positions' });
   }
 });
 

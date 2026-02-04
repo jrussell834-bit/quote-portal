@@ -44,6 +44,8 @@ async function initDb() {
       customer_id uuid references customers(id) on delete set null,
       value numeric,
       stage text not null,
+      position integer default 0,
+      so_number text,
       last_chased_at timestamptz,
       next_chase_at timestamptz,
       reminder_email text,
@@ -63,6 +65,16 @@ async function initDb() {
   // In case the table already existed without the notes column, try to add it.
   await pool.query(
     'alter table quotes add column if not exists notes text'
+  );
+
+  // In case the table already existed without the position column, try to add it.
+  await pool.query(
+    'alter table quotes add column if not exists position integer default 0'
+  );
+
+  // In case the table already existed without the so_number column, try to add it.
+  await pool.query(
+    'alter table quotes add column if not exists so_number text'
   );
 
   // In case the table already existed without the customer_id column, try to add it.
@@ -90,6 +102,34 @@ async function initDb() {
   } catch (err) {
     // Constraint might already exist or there's another issue
     console.log('[db] Note: Could not add foreign key constraint (may already exist):', err.message);
+  }
+
+  // Migrate old stage values to new ones
+  // 'sent' -> 'new' (move to new stage)
+  // 'negotiation' -> 'tender'
+  try {
+    const { rows: sentRows } = await pool.query(`
+      update quotes 
+      set stage = 'new', updated_at = now()
+      where stage = 'sent'
+      returning id
+    `);
+    
+    const { rows: negotiationRows } = await pool.query(`
+      update quotes 
+      set stage = 'tender', updated_at = now()
+      where stage = 'negotiation'
+      returning id
+    `);
+    
+    if (sentRows.length > 0 || negotiationRows.length > 0) {
+      console.log('[db] Migrated stage values:', {
+        sent: sentRows.length,
+        negotiation: negotiationRows.length
+      });
+    }
+  } catch (err) {
+    console.log('[db] Note: Could not migrate stage values (may not be needed):', err.message);
   }
 
   // Basic users table for auth
@@ -224,21 +264,28 @@ async function getAllQuotes() {
     select q.*, c.name as customer_name, c.id as customer_id
     from quotes q
     left join customers c on q.customer_id = c.id
-    order by q.created_at desc
+    order by q.stage, q.position asc, q.created_at desc
   `);
   return rows.map(toQuoteDomain);
 }
 
 async function insertQuote(quote) {
   try {
+    // Get the max position for this stage to add new quote at the end
+    const { rows: maxPos } = await pool.query(
+      'select coalesce(max(position), 0) as max_pos from quotes where stage = $1',
+      [quote.stage]
+    );
+    const newPosition = (maxPos[0]?.max_pos || 0) + 1;
+
     await pool.query(
       `
         insert into quotes (
-          id, title, client_name, customer_id, value, stage,
+          id, title, client_name, customer_id, value, stage, position, so_number,
           last_chased_at, next_chase_at, reminder_email,
           attachment_url, status, notes, created_at, updated_at
         )
-        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
       `,
       [
         quote.id,
@@ -247,6 +294,8 @@ async function insertQuote(quote) {
         quote.customerId ?? null,
         quote.value,
         quote.stage,
+        newPosition,
+        quote.soNumber ?? null,
         quote.lastChasedAt ? new Date(quote.lastChasedAt) : null,
         quote.nextChaseAt ? new Date(quote.nextChaseAt) : null,
         quote.reminderEmail,
@@ -288,13 +337,15 @@ async function updateQuote(id, patch) {
           customer_id = $4,
           value = $5,
           stage = $6,
-          last_chased_at = $7,
-          next_chase_at = $8,
-          reminder_email = $9,
-          attachment_url = $10,
-          status = $11,
-          notes = $12,
-          updated_at = $13
+          position = $7,
+          so_number = $8,
+          last_chased_at = $9,
+          next_chase_at = $10,
+          reminder_email = $11,
+          attachment_url = $12,
+          status = $13,
+          notes = $14,
+          updated_at = $15
       where id = $1
     `,
     [
@@ -304,6 +355,8 @@ async function updateQuote(id, patch) {
       updated.customerId ?? null,
       updated.value,
       updated.stage,
+      updated.position ?? 0,
+      updated.soNumber ?? null,
       updated.lastChasedAt ? new Date(updated.lastChasedAt) : null,
       updated.nextChaseAt ? new Date(updated.nextChaseAt) : null,
       updated.reminderEmail,
@@ -315,6 +368,23 @@ async function updateQuote(id, patch) {
   );
 
   return updated;
+}
+
+async function updateQuotePositions(updates) {
+  // updates is an array of { id, position, stage }
+  try {
+    await pool.query('BEGIN');
+    for (const { id, position, stage } of updates) {
+      await pool.query(
+        'update quotes set position = $1, stage = $2, updated_at = now() where id = $3',
+        [position, stage, id]
+      );
+    }
+    await pool.query('COMMIT');
+  } catch (err) {
+    await pool.query('ROLLBACK');
+    throw err;
+  }
 }
 
 async function getQuoteById(id) {
@@ -365,6 +435,8 @@ function toQuoteDomain(row) {
     customerName: row.customer_name || null,
     value: row.value != null ? Number(row.value) : null,
     stage: row.stage,
+    position: row.position != null ? Number(row.position) : 0,
+    soNumber: row.so_number || null,
     lastChasedAt: row.last_chased_at ? row.last_chased_at.toISOString() : null,
     nextChaseAt: row.next_chase_at ? row.next_chase_at.toISOString() : null,
     reminderEmail: row.reminder_email,
@@ -382,6 +454,7 @@ module.exports = {
   getAllQuotes,
   insertQuote,
   updateQuote,
+  updateQuotePositions,
   getQuoteById,
   getDueReminders,
   markReminderSent,
@@ -393,4 +466,3 @@ module.exports = {
   findOrCreateCustomer,
   getQuotesByCustomerId
 };
-
