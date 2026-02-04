@@ -5,7 +5,7 @@ import {
   Draggable,
   type DropResult
 } from '@hello-pangea/dnd';
-import { createQuote, fetchQuotes, updateQuoteStage, uploadQuoteAttachment, updateQuote } from '../api';
+import { createQuote, fetchQuotes, updateQuoteStage, uploadQuoteAttachment, updateQuote, fetchCustomers, createCustomer, type Customer } from '../api';
 
 type StageKey = 'new' | 'sent' | 'follow_up' | 'negotiation' | 'won' | 'lost';
 
@@ -13,6 +13,8 @@ export type QuoteCard = {
   id: string;
   title: string;
   clientName: string;
+  customerId?: string | null;
+  customerName?: string | null;
   value?: number;
   stage: StageKey;
   lastChasedAt?: string;
@@ -32,7 +34,7 @@ const STAGES: { id: StageKey; title: string }[] = [
   { id: 'lost', title: 'Lost' }
 ];
 
-export const KanbanApp: React.FC = () => {
+export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void }> = ({ onNavigateToCustomers }) => {
   const [quotes, setQuotes] = useState<QuoteCard[]>([]);
   const [filter, setFilter] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -50,6 +52,19 @@ export const KanbanApp: React.FC = () => {
   const [editingQuote, setEditingQuote] = useState<QuoteCard | null>(null);
   const [editNotes, setEditNotes] = useState('');
   const [updating, setUpdating] = useState(false);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [isCreatingNewCustomer, setIsCreatingNewCustomer] = useState(false);
+
+  const loadCustomers = async () => {
+    try {
+      const data = await fetchCustomers();
+      setCustomers(data);
+    } catch (err) {
+      console.error('Failed to load customers:', err);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -63,6 +78,7 @@ export const KanbanApp: React.FC = () => {
         setLoading(false);
       }
     })();
+    loadCustomers();
   }, []);
 
   const filteredQuotes = useMemo(() => {
@@ -116,6 +132,9 @@ export const KanbanApp: React.FC = () => {
     setNewQuoteFile(null);
     setNewQuoteStatus('Tender');
     setNewQuoteNotes('');
+    setSelectedCustomerId('');
+    setNewCustomerName('');
+    setIsCreatingNewCustomer(false);
   };
 
   const handleOpenNewModal = () => {
@@ -164,10 +183,21 @@ export const KanbanApp: React.FC = () => {
 
     setCreating(true);
     try {
+      let customerId = selectedCustomerId || undefined;
+      
+      // If creating a new customer
+      if (isCreatingNewCustomer && newCustomerName.trim()) {
+        const newCustomer = await createCustomer(newCustomerName.trim());
+        customerId = newCustomer.id;
+        await loadCustomers(); // Refresh customer list
+      }
+
       const valueNumber = newQuoteValue ? Number(newQuoteValue) : undefined;
       const payload: Partial<QuoteCard> = {
         title: newQuoteTitle.trim(),
         clientName: newQuoteClient.trim(),
+        customerId: customerId || undefined,
+        customerName: isCreatingNewCustomer ? newCustomerName.trim() : (customers.find(c => c.id === customerId)?.name || undefined),
         value: Number.isNaN(valueNumber) ? undefined : valueNumber,
         stage: 'new',
         reminderEmail: newQuoteEmail || undefined,
@@ -225,6 +255,14 @@ export const KanbanApp: React.FC = () => {
               className="w-64 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm outline-none ring-brand-500/0 transition focus:bg-white focus:ring-2"
             />
             <button
+              type="button"
+              onClick={onNavigateToCustomers}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              Customers
+            </button>
+            <button
+              type="button"
               onClick={handleOpenNewModal}
               disabled={creating}
               className="rounded-lg border border-blue-600 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 shadow-sm hover:bg-blue-50 disabled:opacity-60"
@@ -390,16 +428,71 @@ export const KanbanApp: React.FC = () => {
               New lead
             </h2>
             <form onSubmit={handleCreateQuote} className="space-y-4 text-sm">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  id="createNewCustomer"
+                  checked={isCreatingNewCustomer}
+                  onChange={(e) => {
+                    setIsCreatingNewCustomer(e.target.checked);
+                    if (!e.target.checked) {
+                      setNewCustomerName('');
+                    } else {
+                      setSelectedCustomerId('');
+                    }
+                  }}
+                  className="rounded border-slate-300"
+                />
+                <label htmlFor="createNewCustomer" className="text-xs font-medium text-slate-600">
+                  Create new customer organisation
+                </label>
+              </div>
+
+              {isCreatingNewCustomer ? (
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-slate-600">
+                    Customer organisation name
+                  </span>
+                  <input
+                    type="text"
+                    value={newCustomerName}
+                    onChange={(e) => setNewCustomerName(e.target.value)}
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none ring-blue-500/0 transition focus:bg-white focus:ring-2"
+                    placeholder="Enter organisation name"
+                    required={isCreatingNewCustomer}
+                  />
+                </label>
+              ) : (
                 <label className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-slate-600">
                     Customer organisation
+                  </span>
+                  <select
+                    value={selectedCustomerId}
+                    onChange={(e) => setSelectedCustomerId(e.target.value)}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none ring-blue-500/0 transition focus:bg-white focus:ring-2"
+                  >
+                    <option value="">Select or create new...</option>
+                    {customers.map((customer) => (
+                      <option key={customer.id} value={customer.id}>
+                        {customer.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-slate-600">
+                    Project title
                   </span>
                   <input
                     type="text"
                     value={newQuoteTitle}
                     onChange={(e) => setNewQuoteTitle(e.target.value)}
-                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none ring-brand-500/0 transition focus:bg-white focus:ring-2"
+                    className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none ring-blue-500/0 transition focus:bg-white focus:ring-2"
+                    placeholder="Project/Quote name"
                     required
                   />
                 </label>

@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { KanbanApp } from './KanbanApp';
+import { CustomersApp } from './CustomersApp';
 import { login, register } from '../api';
 
 type Mode = 'login' | 'register';
+type View = 'kanban' | 'customers';
 
 export const AuthApp: React.FC = () => {
   const [mode, setMode] = useState<Mode>('login');
@@ -10,6 +12,7 @@ export const AuthApp: React.FC = () => {
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [view, setView] = useState<View>('kanban');
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
 
@@ -72,7 +75,10 @@ export const AuthApp: React.FC = () => {
   };
 
   if (token) {
-    return <KanbanApp />;
+    if (view === 'customers') {
+      return <CustomersApp onNavigateToKanban={() => setView('kanban')} />;
+    }
+    return <KanbanApp onNavigateToCustomers={() => setView('customers')} />;
   }
 
   return (

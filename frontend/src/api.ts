@@ -98,3 +98,29 @@ export async function login(username: string, password: string) {
   }
 }
 
+export type Customer = {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CustomerWithQuotes = Customer & {
+  quotes: QuoteCard[];
+};
+
+export async function fetchCustomers(): Promise<Customer[]> {
+  const res = await api.get<Customer[]>('/customers');
+  return res.data;
+}
+
+export async function fetchCustomerById(id: string): Promise<CustomerWithQuotes> {
+  const res = await api.get<CustomerWithQuotes>(`/customers/${id}`);
+  return res.data;
+}
+
+export async function createCustomer(name: string): Promise<Customer> {
+  const res = await api.post<Customer>('/customers', { name });
+  return res.data;
+}
+
