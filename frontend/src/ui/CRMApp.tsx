@@ -191,12 +191,14 @@ export const CRMApp: React.FC<{ onNavigateToDashboard: () => void }> = ({ onNavi
   const handleAddActivity = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCustomer) return;
+    
     try {
+      setError(null);
       const newActivity = await createActivity(selectedCustomer.id, {
         type: activityType,
-        subject: activitySubject || undefined,
-        description: activityDescription || undefined,
-        activityDate: activityDate
+        subject: activitySubject.trim() || undefined,
+        description: activityDescription.trim() || undefined,
+        activityDate: activityDate || new Date().toISOString().split('T')[0]
       });
       setActivities([newActivity, ...activities]);
       setIsAddingActivity(false);
@@ -204,9 +206,10 @@ export const CRMApp: React.FC<{ onNavigateToDashboard: () => void }> = ({ onNavi
       setActivitySubject('');
       setActivityDescription('');
       setActivityDate(new Date().toISOString().split('T')[0]);
-    } catch (err) {
-      console.error(err);
-      setError('Unable to create activity.');
+    } catch (err: any) {
+      console.error('Create activity error:', err);
+      const errorMessage = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Unable to create activity. Please try again.';
+      setError(errorMessage);
     }
   };
 
