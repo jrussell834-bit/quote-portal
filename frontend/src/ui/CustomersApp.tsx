@@ -98,7 +98,7 @@ export const CustomersApp: React.FC<{ onNavigateToKanban: () => void }> = ({ onN
               onClick={onNavigateToKanban}
               className="rounded-lg border border-blue-600 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 shadow-sm hover:bg-blue-50"
             >
-              Kanban View
+              Dashboard
             </button>
             <button
               onClick={handleLogout}
