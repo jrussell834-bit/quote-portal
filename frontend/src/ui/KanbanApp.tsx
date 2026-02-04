@@ -26,6 +26,8 @@ export type QuoteCard = {
   attachmentUrl?: string;
   status?: 'Tender' | 'OTP';
   notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 const STAGES: { id: StageKey; title: string }[] = [
@@ -116,6 +118,33 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void; onNavigate
       }, {} as Record<StageKey, QuoteCard[]>),
     [filteredQuotes]
   );
+
+  // Calculate dashboard statistics
+  const dashboardStats = useMemo(() => {
+    const wonCount = quotes.filter(q => q.stage === 'won').length;
+    const lostCount = quotes.filter(q => q.stage === 'lost').length;
+    
+    // Calculate year-to-date value (won projects updated this year)
+    // We use updatedAt to determine when the project was won (moved to won stage)
+    const currentYear = new Date().getFullYear();
+    const ytdValue = quotes
+      .filter(q => q.stage === 'won' && q.value != null)
+      .filter(q => {
+        // Check if the quote was updated this year (when it was won)
+        // This gives us projects won in the current year
+        const dateStr = q.updatedAt || q.createdAt;
+        if (!dateStr) return true; // Include if no date available
+        const updatedYear = new Date(dateStr).getFullYear();
+        return updatedYear === currentYear;
+      })
+      .reduce((sum, q) => sum + (q.value || 0), 0);
+
+    return {
+      won: wonCount,
+      lost: lostCount,
+      ytdValue
+    };
+  }, [quotes]);
 
   const onDragStart = () => {
     setIsDragging(true);
@@ -452,6 +481,55 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void; onNavigate
             {error}
           </div>
         )}
+
+        {/* Dashboard Statistics */}
+        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="rounded-xl bg-gradient-to-br from-green-50 to-green-100 p-4 shadow-sm ring-1 ring-green-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-green-700">Won</p>
+                <p className="mt-1 text-2xl font-bold text-green-900">{dashboardStats.won}</p>
+              </div>
+              <div className="rounded-full bg-green-200 p-3">
+                <svg className="h-6 w-6 text-green-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-gradient-to-br from-red-50 to-red-100 p-4 shadow-sm ring-1 ring-red-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-red-700">Lost</p>
+                <p className="mt-1 text-2xl font-bold text-red-900">{dashboardStats.lost}</p>
+              </div>
+              <div className="rounded-full bg-red-200 p-3">
+                <svg className="h-6 w-6 text-red-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 p-4 shadow-sm ring-1 ring-blue-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-blue-700">YTD Value</p>
+                <p className="mt-1 text-2xl font-bold text-blue-900">
+                  £{dashboardStats.ytdValue.toLocaleString()}
+                </p>
+                <p className="mt-0.5 text-[10px] text-blue-600">Year to Date</p>
+              </div>
+              <div className="rounded-full bg-blue-200 p-3">
+                <svg className="h-6 w-6 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {loading ? (
           <p className="text-sm text-slate-500">Loading quotes...</p>
         ) : null}
