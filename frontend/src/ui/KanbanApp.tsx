@@ -92,9 +92,14 @@ export const KanbanApp: React.FC<{ onNavigateToCustomers: () => void; onNavigate
       try {
         const data = await fetchQuotes();
         setQuotes(data);
-      } catch (err) {
-        console.error(err);
-        setError('Unable to load quotes from the server.');
+        setError(null); // Clear any previous errors
+      } catch (err: any) {
+        console.error('Failed to load quotes:', err);
+        const errorMessage = err?.response?.data?.message || 
+                            err?.response?.data?.error || 
+                            err?.message || 
+                            'Unable to load quotes from the server.';
+        setError(errorMessage);
       } finally {
         setLoading(false);
       }
