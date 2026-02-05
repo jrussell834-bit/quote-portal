@@ -93,6 +93,7 @@ export const CRMApp: React.FC<{ onNavigateToDashboard: () => void }> = ({ onNavi
     if (!selectedCustomer) return;
     try {
       setLoading(true);
+      setError(null); // Clear any previous errors
       const [customerData, contactsData, activitiesData, tasksData] = await Promise.all([
         fetchCustomerById(selectedCustomer.id),
         fetchContactsByCustomerId(selectedCustomer.id),
@@ -103,9 +104,13 @@ export const CRMApp: React.FC<{ onNavigateToDashboard: () => void }> = ({ onNavi
       setContacts(contactsData);
       setActivities(activitiesData);
       setTasks(tasksData);
-    } catch (err) {
-      console.error(err);
-      setError('Unable to load customer details.');
+    } catch (err: any) {
+      console.error('Failed to load customer details:', err);
+      const errorMessage = err?.response?.data?.message || 
+                          err?.response?.data?.error || 
+                          err?.message || 
+                          'Unable to load customer details.';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
